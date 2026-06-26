@@ -1,0 +1,46 @@
+# ============================================================================
+# StrataCLI version-controlled defaults.
+#
+# This is the ONLY place the production StrataHQ literals live. Everything else
+# in the codebase reads the resolved Settings object from strata.config.provider.
+# Any layer (CLI flag > env > local file > SSM/Secrets > this file) overrides it.
+# ============================================================================
+
+[hq]
+endpoint        = "https://hq.shaleio.com/v1"
+artifact_bucket = "stratahq-artifacts-prod"
+region          = "us-east-1"
+auth            = "license_token"   # how the CLI authenticates to the entitlement API
+# token is NOT stored here — supply via env (STRATA_HQ_TOKEN), local config, or SSM.
+# Optional: a stable CDN URL serving the StrataHQ discovery doc. If set, the CLI
+# resolves endpoint/bucket from it (so HQ can migrate without a client update).
+discovery_url   = ""
+
+[defaults]
+source = "stratahq"                 # default install source; override with --source
+
+# Customer-account resource conventions. Empty bucket => derived at runtime as
+# "strataci-<account_id>-<region>". Override here, in local config, or via SSM
+# after running the customer bootstrap (strataci-runner/infra).
+[customer]
+bucket            = ""
+install_table     = "strataci_install_registry"
+jobs_table        = "strataci_jobs"
+lock_table        = "strataci_tf_locks"
+log_group         = "/strataci/runner"
+codebuild_project = "strataci-runner"
+
+# StrataBI dashboard git-sync. bucket + table names come from the StrataBI runtime
+# deployment (terraform output / its env). Fill in per deployment via config or the
+# STRATA_DASH_* env vars; the prefix/local_dir defaults match the runtime.
+[dashboards]
+bucket             = ""
+git_registry_table = ""
+pinned_table       = ""
+prefix             = "analyst/dashboards"
+local_dir          = "dashboards"
+
+# `stratacli fetch-runtime` — pulls the account-entitled StrataBI runtime artifact.
+[runtime]
+module_id = "stratabi-runtime"
+dist_dir  = "dist"

@@ -1,0 +1,25 @@
+{
+  "_comment": "Reference module manifest. Module AUTHORS must declare structured required_permissions (service/actions/resources) so the runner can scope the deploy role down to exactly these (Decision A). The legacy string-list form (e.g. [\"s3\",\"lambda\"]) still parses but yields broad service:* grants and is Shaleio-internal only.",
+  "module_id": "iceberg_explorer",
+  "version": "0.1.0",
+  "entrypoint": "tofu",
+  "supports_destroy": true,
+  "state_key": "strataci/modules/iceberg_explorer/terraform.tfstate",
+  "required_permissions": [
+    {
+      "service": "s3",
+      "actions": ["s3:CreateBucket", "s3:PutBucketPolicy", "s3:PutObject", "s3:GetObject", "s3:DeleteObject", "s3:ListBucket"],
+      "resources": ["arn:aws:s3:::acme-iceberg-*", "arn:aws:s3:::acme-iceberg-*/*"]
+    },
+    {
+      "service": "glue",
+      "actions": ["glue:CreateDatabase", "glue:CreateTable", "glue:GetTable", "glue:GetDatabase"],
+      "resources": ["*"]
+    },
+    {
+      "service": "athena",
+      "actions": ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults"],
+      "resources": ["*"]
+    }
+  ]
+}
