@@ -21,6 +21,7 @@ import boto3
 
 from strata.artifacts import bundle, manifest as manifest_
 from strata.registry import installs, jobs
+from strata.runner import sensitive
 
 
 def _env(name: str, default: str | None = None, required: bool = False) -> str | None:
@@ -92,6 +93,21 @@ def main() -> int:
 
     session = boto3.Session(region_name=region)
     s3 = session.client("s3")
+
+    # #2 account self-check: the runner verifies the account it is actually running
+    # in against the licensed/entitled account passed by the CLI. A copied job spec
+    # replayed into a different account is refused here. (The cryptographic version —
+    # comparing against a signed, account-bound token — is the runtime boot-time
+    # check tracked in OPEN_QUESTIONS; this is the cheap consistency gate.)
+    real_account = session.client("sts").get_caller_identity()["Account"]
+    entitled_account = _env("STRATA_CUSTOMER_ID")
+    print(f"runner: account {real_account}", flush=True)
+    if entitled_account and real_account != entitled_account:
+        jobs.set_status(session, jobs_table, job_id, jobs.FAILED, exit_code=2,
+                        error="account mismatch: runner is not in the licensed account")
+        print(f"runner: REFUSING — running in {real_account} but entitlement is for "
+              f"{entitled_account}", file=sys.stderr, flush=True)
+        return 2
 
     jobs.set_status(session, jobs_table, job_id, jobs.RUNNING)
     workroot = Path(tempfile.mkdtemp(prefix="strataci-"))
@@ -170,8 +186,11 @@ def main() -> int:
         return 0
 
     except Exception as exc:  # noqa: BLE001 — top-level runner boundary
-        jobs.set_status(session, jobs_table, job_id, jobs.FAILED, exit_code=1, error=str(exc))
-        print(f"runner: {action} {module_id} FAILED: {exc}", file=sys.stderr, flush=True)
+        # Scrub any sensitive value (e.g. the presigned artifact URL) from the error
+        # before it reaches the runner log or the jobs table.
+        safe = sensitive.redact_text(str(exc))
+        jobs.set_status(session, jobs_table, job_id, jobs.FAILED, exit_code=1, error=safe)
+        print(f"runner: {action} {module_id} FAILED: {safe}", file=sys.stderr, flush=True)
         return 1
     finally:
         shutil.rmtree(workroot, ignore_errors=True)

@@ -25,6 +25,12 @@ class CodeBuildRunner:
 
     def start(self, session, *, job_id: str, env: dict[str, str]) -> dict:
         cb = session.client("codebuild")
+        # Some of these are sensitive (see strata.runner.sensitive.SENSITIVE_ENV) —
+        # chiefly the short-lived presigned artifact URL. CodeBuild has no per-variable
+        # redaction for PLAINTEXT overrides, so the value is visible in the build's
+        # environment metadata to in-account principals; we accept that because it is
+        # ephemeral (<= the presign TTL), single-object and read-only. The launcher never
+        # logs override values, and the runner scrubs them from any error output.
         overrides = [{"name": k, "value": str(v), "type": "PLAINTEXT"}
                      for k, v in env.items()]
         try:

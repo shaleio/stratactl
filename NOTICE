@@ -1,0 +1,18 @@
+StrataCLI
+Copyright 2026 Shaleio LLC
+
+This product includes software developed by Shaleio LLC.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this software except in compliance with the License. You may obtain a
+copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+"Shaleio", "StrataBI", "StrataCLI", "StrataHQ", "Shaleio Guild", and associated
+logos and product names are trademarks of Shaleio LLC. This License does not
+grant permission to use these marks except as required for reasonable and
+customary use in describing the origin of the software.
+
+StrataCLI installs and manages StrataBI, which is licensed separately. Use of
+the StrataBI Enterprise software is governed by the StrataBI Commercial License
+Agreement, and the developer/community edition by the Shaleio Guild Community
+License — not by this Apache-2.0 license, which covers the StrataCLI tool only.

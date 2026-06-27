@@ -39,7 +39,8 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         }
     elif src.kind == KIND_STRATAHQ:
         ent = hq.check_entitlement(settings.hq, customer_id=account,
-                                   module_id=module_id, version=version)
+                                   module_id=module_id, version=version,
+                                   session=sess, region=settings.hq.region or settings.region)
         artifact_env = {"STRATA_ARTIFACT_URL": ent.artifact_url or ""}
         if ent.sha256:
             artifact_env["STRATA_ARTIFACT_SHA256"] = ent.sha256
@@ -62,6 +63,9 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         "STRATA_VERSION": version,
         "STRATA_REGION": settings.region,
         "STRATA_JOB_ID": job.job_id,
+        # The licensed/verified account; the runner refuses to deploy if it finds
+        # itself running in a different account (#2 account self-check).
+        "STRATA_CUSTOMER_ID": account,
         "STRATA_STATE_BUCKET": bucket,
         "STRATA_LOCK_TABLE": settings.customer.lock_table,
         "STRATA_INSTALL_TABLE": settings.customer.install_table,

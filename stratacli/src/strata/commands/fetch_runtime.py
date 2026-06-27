@@ -23,9 +23,11 @@ def run(settings, args) -> int:
     version = getattr(args, "version", None) or "latest"
     module_id = settings.runtime.module_id
 
-    # account-scoped entitlement check (raises EntitlementDenied if not licensed)
+    # account-scoped entitlement check (raises EntitlementDenied if not licensed).
+    # SigV4-signed so HQ verifies the caller account from the signature.
     ent = hq.check_entitlement(settings.hq, customer_id=account,
-                               module_id=module_id, version=version)
+                               module_id=module_id, version=version,
+                               session=sess, region=settings.hq.region or settings.region)
 
     dist = Path(getattr(args, "dir", None) or settings.runtime.dist_dir)
     dist.mkdir(parents=True, exist_ok=True)
