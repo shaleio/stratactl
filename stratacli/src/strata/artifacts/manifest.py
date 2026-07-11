@@ -27,6 +27,13 @@ from strata.errors import ManifestError
 
 VALID_ENTRYPOINTS = {"tofu"}
 
+# Delivery mode governs whether the tofu bundle is persisted into the customer's
+# environment. "local": the runner caches the verified bundle to the customer
+# bucket, so teardown works offline/airgapped and without HQ. "managed": the
+# bundle is never persisted; uninstall re-fetches it from HQ (destroy is always
+# permitted, even for a lapsed/retired grant). Default local.
+VALID_DELIVERY = {"local", "managed"}
+
 
 @dataclass
 class Manifest:
@@ -34,6 +41,7 @@ class Manifest:
     version: str
     entrypoint: str
     state_key: str
+    delivery: str = "local"
     required_permissions: list[Any] = field(default_factory=list)
     supports_destroy: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
@@ -71,6 +79,12 @@ def validate(data: dict[str, Any]) -> Manifest:
     if state_key.startswith("/") or ".." in state_key:
         raise ManifestError(f"unsafe state_key '{state_key}'")
 
+    delivery = data.get("delivery", "local")
+    if delivery not in VALID_DELIVERY:
+        raise ManifestError(
+            f"delivery must be one of {sorted(VALID_DELIVERY)}, got '{delivery}'"
+        )
+
     perms = data.get("required_permissions", [])
     if not isinstance(perms, list):
         raise ManifestError("required_permissions must be a list")
@@ -82,6 +96,7 @@ def validate(data: dict[str, Any]) -> Manifest:
         version=str(data["version"]),
         entrypoint=entrypoint,
         state_key=state_key,
+        delivery=delivery,
         required_permissions=perms,
         supports_destroy=bool(data.get("supports_destroy", False)),
         raw=data,

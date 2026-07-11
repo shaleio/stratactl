@@ -10,14 +10,13 @@ the signature rather than a client-asserted field — a license token can only b
 redeemed from the account it was issued for. The license token rides in the
 X-Strata-Token header (Authorization is reserved for the SigV4 signature).
 
-Transport is urllib (stdlib); signing uses botocore (already a dependency via boto3).
+Transport + signing both use botocore (a dependency via boto3): the signed
+AWSRequest is sent as-is, so the bytes/headers on the wire match the signature.
 """
 
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
@@ -39,34 +38,52 @@ class EntitlementResult:
     reason: Optional[str] = None
 
 
-def _signed_headers(session, region: str, url: str, payload: bytes,
-                    token: Optional[str]) -> dict:
-    """SigV4-sign the POST and return the headers to send. Region must be the API's
-    region (not necessarily the request's apparent host — a custom domain still
-    signs against the API's region)."""
+def _send(session, url: str, payload: bytes, hq: HQConfig,
+          region: Optional[str], timeout: int):
+    """Sign (SigV4 execute-api, when a session is given) and send the POST via
+    botocore's own HTTP session, so the exact bytes + headers that were signed are
+    what goes on the wire.
+
+    This matters: copying the signed headers into a fresh urllib request re-processes
+    the body/headers (Content-Type, Host, header casing) in ways that can invalidate
+    a SigV4 signature — API Gateway then rejects it with a 403 before the Lambda runs.
+    Sending the prepared AWSRequest avoids that. Region must be the API's region (a
+    custom domain still signs against the API's region). Returns (status, body_bytes).
+    """
     try:
         from botocore.auth import SigV4Auth
         from botocore.awsrequest import AWSRequest
+        from botocore.httpsession import URLLib3Session
     except ModuleNotFoundError as exc:  # pragma: no cover
-        raise ConfigError("botocore is required to sign StrataHQ requests") from exc
-
-    creds = session.get_credentials()
-    if creds is None:
-        raise ConfigError("no AWS credentials available to sign the StrataHQ request")
+        raise ConfigError("botocore is required to call StrataHQ") from exc
 
     headers = {"Content-Type": "application/json"}
-    if token:
-        headers["X-Strata-Token"] = token  # signed below (included in the request)
+    if hq.token:
+        headers["X-Strata-Token"] = hq.token  # included in the signature below
 
-    req = AWSRequest(method="POST", url=url, data=payload, headers=headers)
-    SigV4Auth(creds.get_frozen_credentials(), SIGV4_SERVICE, region).add_auth(req)
-    return dict(req.headers)
+    aws_req = AWSRequest(method="POST", url=url, data=payload, headers=headers)
+    if session is not None:
+        creds = session.get_credentials()
+        if creds is None:
+            raise ConfigError("no AWS credentials available to sign the StrataHQ request")
+        sign_region = region or hq.region or "us-east-1"
+        SigV4Auth(creds.get_frozen_credentials(), SIGV4_SERVICE, sign_region).add_auth(aws_req)
+
+    try:
+        resp = URLLib3Session(timeout=timeout).send(aws_req.prepare())
+    except Exception as exc:  # transport error
+        raise StrataError(f"could not reach StrataHQ at {url}: {exc}") from exc
+    return resp.status_code, (resp.content or b"{}")
 
 
 def check_entitlement(hq: HQConfig, customer_id: str, module_id: str,
                       version: str, *, session=None, region: Optional[str] = None,
-                      timeout: int = 15) -> EntitlementResult:
-    """POST /entitlement to StrataHQ. Raises EntitlementDenied on a hard 'no'."""
+                      timeout: int = 15, action: Optional[str] = None) -> EntitlementResult:
+    """POST /entitlement to StrataHQ. Raises EntitlementDenied on a hard 'no'.
+
+    action="destroy" asks HQ for the retained artifact so a teardown can proceed
+    even if the grant has lapsed or the version is retired (destroy is always
+    permitted). Omit for install/update, which require an active grant."""
     if not hq.endpoint:
         raise ConfigError("StrataHQ endpoint is not configured.")
     if not hq.token:
@@ -76,46 +93,39 @@ def check_entitlement(hq: HQConfig, customer_id: str, module_id: str,
         )
 
     url = hq.endpoint.rstrip("/") + "/entitlement"
-    payload = json.dumps({
+    body = {
         "customer_id": customer_id,
         "module_id": module_id,
         "version": version,
-    }).encode("utf-8")
+    }
+    if action:
+        body["action"] = action
+    payload = json.dumps(body).encode("utf-8")
 
-    if session is not None:
-        sign_region = region or hq.region or "us-east-1"
-        headers = _signed_headers(session, sign_region, url, payload, hq.token)
-    else:
-        # Unsigned fallback (only works against a non-IAM-authed endpoint).
-        headers = {"Content-Type": "application/json", "X-Strata-Token": hq.token}
-
-    req = urllib.request.Request(url, data=payload, method="POST")
-    for k, v in headers.items():
-        req.add_header(k, v)
-
+    status, raw = _send(session, url, payload, hq, region, timeout)
+    if status in (401, 403):
+        raise EntitlementDenied(
+            f"StrataHQ denied {module_id}@{version} (HTTP {status}). "
+            "Check that you are signing from the licensed AWS account and that "
+            "the license token is valid."
+        )
+    if status >= 400:
+        detail = raw[:300].decode("utf-8", "replace")
+        raise StrataError(f"StrataHQ error (HTTP {status}): {detail}")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
-            raise EntitlementDenied(
-                f"StrataHQ denied {module_id}@{version} (HTTP {exc.code}). "
-                "Check that you are signing from the licensed AWS account and that "
-                "the license token is valid."
-            ) from exc
-        raise StrataError(f"StrataHQ error (HTTP {exc.code}): {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise StrataError(f"could not reach StrataHQ at {url}: {exc.reason}") from exc
+        resp_body = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise StrataError("StrataHQ returned a non-JSON response.") from exc
 
     result = EntitlementResult(
-        allow=bool(body.get("allow")),
+        allow=bool(resp_body.get("allow")),
         module_id=module_id,
-        version=body.get("version", version),
-        artifact_url=body.get("artifact_url"),
-        sha256=body.get("sha256"),
-        signature=body.get("signature"),
-        expires_at=body.get("expires_at"),
-        reason=body.get("reason"),
+        version=resp_body.get("version", version),
+        artifact_url=resp_body.get("artifact_url"),
+        sha256=resp_body.get("sha256"),
+        signature=resp_body.get("signature"),
+        expires_at=resp_body.get("expires_at"),
+        reason=resp_body.get("reason"),
     )
     if not result.allow:
         raise EntitlementDenied(result.reason or f"not entitled to {module_id}@{version}")

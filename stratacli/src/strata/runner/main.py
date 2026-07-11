@@ -168,10 +168,21 @@ def main() -> int:
                                                   cwd=str(tofu_dir), env=deploy_env)
             outputs = json.loads(outputs_raw or b"{}")
 
-            # cache the verified bundle so future update/uninstall work without HQ
-            bundle.cache_to_customer_s3(s3, state_bucket, module_id, version, zip_path)
+            # Delivery mode (manifest): "local" persists the verified bundle into
+            # the customer bucket so update/uninstall/destroy work offline and
+            # airgapped; "managed" leaves no tofu behind — teardown re-fetches from
+            # HQ (destroy is always permitted there). Either way state stays in the
+            # customer's S3 backend.
+            bundle_uri = None
+            if m.delivery == "local":
+                bundle_uri = bundle.cache_to_customer_s3(s3, state_bucket, module_id, version, zip_path)
+                print(f"runner: delivery=local — bundle cached to {bundle_uri}", flush=True)
+            else:
+                print("runner: delivery=managed — bundle not persisted to the customer bucket", flush=True)
             installs.upsert(session, install_table, module_id=module_id, version=version,
-                            state_key=state_key, outputs=outputs, job_id=job_id)
+                            state_key=state_key, outputs=outputs, job_id=job_id,
+                            delivery=m.delivery, bundle_uri=bundle_uri,
+                            sha256=actual, signature=signature)
 
         elif action in ("uninstall", "destroy"):
             if not m.supports_destroy:

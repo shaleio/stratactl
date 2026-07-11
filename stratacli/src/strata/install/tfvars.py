@@ -98,3 +98,45 @@ def render_module(schema: InstallSchema, config: dict[str, Any], module_id: str)
     if not any_field:
         return ""
     return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# JSON rendering — for the StrataCI runner. The CLI uploads the result as an
+# *.auto.tfvars.json file the runner drops next to the module's tofu, so a customer's
+# `strata init` values reach the ephemeral build (which never sees strata.yaml).
+# --------------------------------------------------------------------------- #
+def _native_value(field: Field, value: Any) -> Any:
+    """Coerce to a native JSON type (bool/int/list/str) rather than an HCL string."""
+    if field.type == "list":
+        return value if isinstance(value, list) else ([] if value in (None, "") else [value])
+    if field.type == "bool":
+        return bool(value)
+    if field.type == "int":
+        return int(value)
+    return value
+
+
+def render_json(schema: InstallSchema, config: dict[str, Any]) -> dict[str, Any]:
+    """Render the deployment config as a {tfvar: native_value} dict (JSON tfvars)."""
+    out: dict[str, Any] = {}
+    for section in schema.sections():
+        for f in schema.fields:
+            if f.section != section or not f.tfvar:
+                continue
+            value = _resolve(f, config)
+            if not _emit(f, value):
+                continue
+            out[f.tfvar] = _native_value(f, value)
+    return out
+
+
+def render_module_json(schema: InstallSchema, config: dict[str, Any], module_id: str) -> dict[str, Any]:
+    """render_json for a module whose values live under its module section."""
+    section = store.module_section(module_id)
+    out: dict[str, Any] = {}
+    for f in schema.tfvar_fields():
+        value = store.get(config, section, f.key, f.default)
+        if not _emit(f, value):
+            continue
+        out[f.tfvar] = _native_value(f, value)
+    return out

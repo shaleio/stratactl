@@ -1,0 +1,33 @@
+version: 0.2
+
+# Reference buildspec for the StrataBI runtime image build (build_template).
+# Runs in a CodeBuild project with privileged mode (Docker). It:
+#   1. pulls the account-entitled runtime wheel from S3,
+#   2. writes a minimal Dockerfile FROM a PUBLIC base image and installs the wheel,
+#   3. builds and pushes the image to your ECR repo.
+# Env vars (AWS_REGION, ECR_URI, WHEEL_BUCKET, WHEEL_KEY, IMAGE_TAG, BASE_IMAGE)
+# are injected by the Terraform (main.tf).
+
+phases:
+  pre_build:
+    commands:
+      - echo "Fetching entitled runtime wheel from s3://$WHEEL_BUCKET/$WHEEL_KEY"
+      - aws s3 cp "s3://$WHEEL_BUCKET/$WHEEL_KEY" runtime.whl
+      - REGISTRY="${ECR_URI%%/*}"
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+      - |
+        cat > Dockerfile <<DOCKER
+        FROM ${BASE_IMAGE}
+        WORKDIR /app
+        COPY runtime.whl /tmp/runtime.whl
+        RUN pip install --no-cache-dir /tmp/runtime.whl && rm -f /tmp/runtime.whl
+        EXPOSE 8050
+        CMD ["python", "-m", "stratabi.app"]
+        DOCKER
+  build:
+    commands:
+      - docker build -t "$ECR_URI:$IMAGE_TAG" .
+  post_build:
+    commands:
+      - docker push "$ECR_URI:$IMAGE_TAG"
+      - echo "pushed $ECR_URI:$IMAGE_TAG"

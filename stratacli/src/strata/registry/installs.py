@@ -25,7 +25,9 @@ def _now() -> str:
 
 def upsert(session, table_name: str, *, module_id: str, version: str, state_key: str,
            status: str = INSTALLED, outputs: Optional[dict] = None,
-           job_id: Optional[str] = None, previous_version: Optional[str] = None) -> None:
+           job_id: Optional[str] = None, previous_version: Optional[str] = None,
+           delivery: str = "local", bundle_uri: Optional[str] = None,
+           sha256: Optional[str] = None, signature: Optional[str] = None) -> None:
     item: dict[str, Any] = {
         "module_id": module_id,
         "version": version,
@@ -33,7 +35,18 @@ def upsert(session, table_name: str, *, module_id: str, version: str, state_key:
         "status": status,
         "updated_at": _now(),
         "outputs": outputs or {},
+        # Delivery mode + where the tofu bundle lives, so uninstall/destroy can
+        # find the source: local => bundle_uri in the customer bucket (offline
+        # teardown); managed => re-fetch from HQ. sha256/signature let the local
+        # teardown re-verify the cached bundle offline.
+        "delivery": delivery,
     }
+    if bundle_uri:
+        item["bundle_uri"] = bundle_uri
+    if sha256:
+        item["sha256"] = sha256
+    if signature:
+        item["signature"] = signature
     if job_id:
         item["last_job"] = job_id
     if previous_version:
