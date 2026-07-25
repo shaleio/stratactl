@@ -1,7 +1,7 @@
 # ============================================================================
 # StrataCI execution plane — customer AWS account.
 #
-# Provisions the resources `stratacli` and the ephemeral runner use:
+# Provisions the resources `stratactl` and the ephemeral runner use:
 #   * S3 bucket (artifacts cache, tofu state, logs)
 #   * DynamoDB: install registry, jobs, tofu state lock
 #   * CloudWatch log group
@@ -266,11 +266,11 @@ resource "aws_codebuild_project" "runner" {
 }
 
 # ----------------------------------------------------------------------------
-# Operator IAM policy — attach to the engineer who runs `stratacli`.
+# Operator IAM policy — attach to the engineer who runs `stratactl`.
 # ----------------------------------------------------------------------------
 resource "aws_iam_policy" "operator" {
   name        = "${var.name_prefix}-operator"
-  description = "Permissions for an engineer running StrataCLI against this account."
+  description = "Permissions for an engineer running StrataCTL against this account."
 
   policy = jsonencode({
     Version = "2012-10-17",

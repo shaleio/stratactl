@@ -16,8 +16,8 @@ RUN apt-get update \
 
 # Install the strata package (CLI + runner share one codebase). The [runner]
 # extra adds cryptography for offline bundle-signature verification.
-COPY ../../stratacli /opt/stratacli
-RUN pip install --no-cache-dir "/opt/stratacli[runner]"
+COPY ../../stratactl /opt/stratactl
+RUN pip install --no-cache-dir "/opt/stratactl[runner]"
 
 # CodeBuild overrides the command via buildspec; this is the default for local runs.
 ENTRYPOINT ["python", "-m", "strata.runner"]

@@ -18,7 +18,7 @@ variable "ecr_repo_name" {
 
 variable "wheel_bucket" {
   type        = string
-  description = "S3 bucket holding the account-entitled runtime wheel (upload it there after `stratacli fetch-runtime`)."
+  description = "S3 bucket holding the account-entitled runtime wheel (upload it there after `stratactl fetch-runtime`)."
 }
 
 variable "wheel_key" {

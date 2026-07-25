@@ -1,15 +1,15 @@
-# Changelog — StrataCLI
+# Changelog — StrataCTL
 
-All notable changes to StrataCLI. Format loosely follows Keep a Changelog;
+All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
 ## [Unreleased]
 
 ### Added
-- `stratacli bootstrap` — stand StrataCI up in a customer AWS account (validates
+- `stratactl bootstrap` — stand StrataCI up in a customer AWS account (validates
   creds/tofu, extracts version-matched packaged infra into a `platformdirs` working
   dir; **dry-run by default**, applies only with `--run --yes`/confirmation).
-- `stratacli dev` group — `install` (HQ-free), `status`, `outputs`, `logs`,
+- `stratactl dev` group — `install` (HQ-free), `status`, `outputs`, `logs`,
   `uninstall`, `configure-local` (writes non-secret `.env`, never AWS keys).
 - Public-URL artifact source (`KIND_PUBLIC`): install the Developer Edition from a
   public GitHub release with **no StrataHQ contact**.
@@ -18,7 +18,7 @@ versions follow the package version in `pyproject.toml`.
 - Release CI scaffold; `dev` extra (pytest/build/twine); `platformdirs` dependency.
 
 ### Changed
-- Distribution name `strata-cli` → **`stratacli`** (intended PyPI name).
+- Distribution name `strata-cli` → **`stratactl`** (intended PyPI name).
 - Richer `pyproject` metadata + broadened package-data.
 
 ### Housekeeping

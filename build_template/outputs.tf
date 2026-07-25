@@ -4,7 +4,7 @@ output "ecr_repository_url" {
 }
 
 output "image_uri" {
-  description = "Full image URI to hand to `stratacli init` (stratabi_image) for the platform install."
+  description = "Full image URI to hand to `stratactl init` (stratabi_image) for the platform install."
   value       = "${aws_ecr_repository.runtime.repository_url}:${var.image_tag}"
 }
 

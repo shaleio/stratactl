@@ -32,12 +32,12 @@ output "deploy_role_arn" {
 }
 
 output "operator_policy_arn" {
-  description = "Attach to the engineer/identity that runs StrataCLI."
+  description = "Attach to the engineer/identity that runs StrataCTL."
   value       = aws_iam_policy.operator.arn
 }
 
-# Ready-to-paste local config for StrataCLI (~/.stratacli/config.toml [customer]).
-output "stratacli_customer_config" {
+# Ready-to-paste local config for StrataCTL (~/.stratactl/config.toml [customer]).
+output "stratactl_customer_config" {
   value = <<-EOT
     [customer]
     bucket            = "${aws_s3_bucket.strataci.bucket}"

@@ -1,6 +1,6 @@
-# Contributing to StrataCLI
+# Contributing to StrataCTL
 
-StrataCLI is licensed **Apache-2.0** (see `LICENSE` and `NOTICE`). Contributions are
+StrataCTL is licensed **Apache-2.0** (see `LICENSE` and `NOTICE`). Contributions are
 accepted under Apache-2.0.
 
 ## Ground rules
@@ -14,7 +14,7 @@ accepted under Apache-2.0.
 ## Development
 
 ```bash
-cd stratacli
+cd stratactl
 pip install -e '.[dev]'
 python -m pytest
 python -m compileall src/strata

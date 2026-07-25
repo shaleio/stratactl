@@ -2,7 +2,7 @@
 # build_template — StrataBI runtime image build pipeline (REFERENCE, NOT A PRODUCT)
 #
 # Stands up a CodeBuild project that builds the StrataBI runtime container image
-# from the account-entitled runtime wheel (fetched with `stratacli fetch-runtime`
+# from the account-entitled runtime wheel (fetched with `stratactl fetch-runtime`
 # and uploaded to S3), using a PUBLIC base image, and pushes it to an ECR repo in
 # your account. StrataCI deliberately does NOT run Docker builds — you own the
 # image build. This is a starting point you can customize; it is labeled

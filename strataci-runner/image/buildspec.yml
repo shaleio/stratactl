@@ -2,7 +2,7 @@ version: 0.2
 
 # StrataCI runner buildspec.
 #
-# Runs inside the ephemeral CodeBuild build launched by `stratacli`. The job spec
+# Runs inside the ephemeral CodeBuild build launched by `stratactl`. The job spec
 # (STRATA_ACTION, STRATA_MODULE, artifact ref, state backend, table names, ...) is
 # injected as environment-variable overrides at StartBuild time — see
 # strata/runner/main.py for the contract.

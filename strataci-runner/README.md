@@ -1,6 +1,6 @@
 # StrataCI Runner — customer-account execution plane
 
-Deploy this **once per AWS account**. It creates the ephemeral runner that StrataCLI
+Deploy this **once per AWS account**. It creates the ephemeral runner that StrataCTL
 uses to run OpenTofu for module + platform installs — inside *your* account, with
 *your* credentials. Shaleio never receives credentials here.
 
@@ -13,7 +13,7 @@ uses to run OpenTofu for module + platform installs — inside *your* account, w
 | IAM role | `<prefix>-runner-role` | the CodeBuild runner (scoped: bucket, tables, logs, assume-deploy) |
 | IAM role | `<prefix>-deploy-role` | broad role the runner assumes **with a per-module session policy** (effective perms = role ∩ module scope) |
 | CodeBuild | `<prefix>-runner` | the ephemeral runner (`python -m strata.runner`) |
-| IAM policy | `<prefix>-operator` | attach to the engineer who runs StrataCLI |
+| IAM policy | `<prefix>-operator` | attach to the engineer who runs StrataCTL |
 
 ## The runner needs the `strata` package
 
@@ -32,7 +32,7 @@ BUCKET=$PREFIX-$(aws sts get-caller-identity --query Account --output text)-us-e
 
 # 1. build the CLI wheel (see ../build_cli_wheel.sh)
 ../build_cli_wheel.sh
-WHEEL=$(ls ../stratacli/dist/*.whl)
+WHEEL=$(ls ../stratactl/dist/*.whl)
 
 # 2. apply the scaffold (strata_pkg is read only when a build runs, so a single apply is fine)
 cd infra && terraform init
@@ -40,7 +40,7 @@ terraform apply -var name_prefix=$PREFIX -var strata_pkg="s3://$BUCKET/cli/$(bas
 
 # 3. upload the wheel where the runner will look, and wire the CLI to this account
 aws s3 cp "$WHEEL" "s3://$BUCKET/cli/$(basename $WHEEL)"
-terraform output -raw stratacli_customer_config > ~/.stratacli/config.toml
+terraform output -raw stratactl_customer_config > ~/.stratactl/config.toml
 
 # 4. (optional) grant yourself the operator permissions
 aws iam attach-user-policy --user-name <you> --policy-arn "$(terraform output -raw operator_policy_arn)"
@@ -58,8 +58,8 @@ aws iam attach-user-policy --user-name <you> --policy-arn "$(terraform output -r
 | `strata_pkg` | `""` | `s3://…/strata_cli-*.whl` or a pip spec. Empty only if the image is prebaked. |
 | `tofu_version` | `1.8.5` | Installed by the buildspec when not prebaked. |
 
-> The `<name_prefix>` **must** match what StrataCLI uses for this account. Paste
-> `terraform output stratacli_customer_config` into your CLI config so the bucket +
+> The `<name_prefix>` **must** match what StrataCTL uses for this account. Paste
+> `terraform output stratactl_customer_config` into your CLI config so the bucket +
 > table names line up.
 
 ## Prebaked runner image (`image/`)

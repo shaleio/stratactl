@@ -1,4 +1,4 @@
-# Strata orchestrator (StrataCLI · StrataCI · StrataHQ)
+# Strata orchestrator (StrataCTL · StrataCI · StrataHQ)
 
 A free installer/orchestrator layer for StrataBI modules. An engineer runs a
 local CLI; the actual work happens in an **ephemeral CodeBuild runner inside the
@@ -6,14 +6,14 @@ customer's own AWS account**; Shaleio's control plane only gates licensed
 artifacts. No long-lived Shaleio credentials ever enter a customer account.
 
 ```
-stratacli install iceberg-explorer --source stratahq --env dev
+stratactl install iceberg-explorer --source stratahq --env dev
 ```
 
 ## What's in this repo
 
 | Dir | Layer | What it is | Docs |
 |---|---|---|---|
-| `stratacli/` | **StrataCLI** | Local Python CLI (+ the runner program — one shared `strata` package). | [README](stratacli/README.md) |
+| `stratactl/` | **StrataCTL** | Local Python CLI (+ the runner program — one shared `strata` package). | [README](stratactl/README.md) |
 | `strataci-runner/` | **StrataCI Runner** | The ephemeral execution surface: CodeBuild `buildspec`/`Dockerfile` + the customer-account Terraform (S3, DynamoDB, IAM, CodeBuild project). | [README](strataci-runner/README.md) |
 | `build_template/` | **Image build (reference)** | Optional CodeBuild pipeline that builds the StrataBI runtime image from the entitled wheel and pushes it to your ECR. | [README](build_template/README.md) |
 
@@ -24,7 +24,7 @@ stratacli install iceberg-explorer --source stratahq --env dev
 
 1. **Scaffold the runner** once per account — [`strataci-runner`](strataci-runner/README.md).
 2. **Build the runtime image** → ECR — [`build_template`](build_template/README.md).
-3. **Configure + deploy** — [`stratacli`](stratacli/README.md): `stratacli init` → `stratacli install-stratabi`.
+3. **Configure + deploy** — [`stratactl`](stratactl/README.md): `stratactl init` → `stratactl install-stratabi`.
 
 ## Credential boundary (the core idea)
 
@@ -37,7 +37,7 @@ stratacli install iceberg-explorer --source stratahq --env dev
 
 ## Install flow
 
-1. `stratacli install <module>` resolves config (5-layer) and the artifact source.
+1. `stratactl install <module>` resolves config (5-layer) and the artifact source.
 2. `source=customer_s3` → no HQ call. `source=stratahq` → POST `/v1/entitlement`
    (token-gated) → the DynamoDB gate returns allow + presigned URL + sha256.
 3. CLI creates a job record and launches the CodeBuild runner with the job spec.
@@ -62,28 +62,28 @@ python ../seed/seed.py --table "$(tofu output -raw entitlements_table)" \
 
 # 2. StrataCI execution plane (customer account) — once per account
 cd ../../strataci-runner/infra && tofu init && tofu apply
-#   attach the operator policy to yourself; paste `stratacli_customer_config`
-#   into ~/.stratacli/config.toml
+#   attach the operator policy to yourself; paste `stratactl_customer_config`
+#   into ~/.stratactl/config.toml
 
-# 3. StrataCLI (operator laptop)
-cd ../../stratacli && pip install -e .
+# 3. StrataCTL (operator laptop)
+cd ../../stratactl && pip install -e .
 export STRATA_HQ_TOKEN=...        # the raw token you seeded in step 1
-stratacli init                    # show resolved config + expected resources
-stratacli install iceberg-explorer --source stratahq --env dev
-stratacli list
+stratactl init                    # show resolved config + expected resources
+stratactl install iceberg-explorer --source stratahq --env dev
+stratactl list
 ```
 
 ## ForgeWorks AWS demo
 
-Once a StrataBI Dev data plane is installed (`stratacli dev install`), you can stand
+Once a StrataBI Dev data plane is installed (`stratactl dev install`), you can stand
 up the **ForgeWorks AWS Demo** — synthetic data uploaded to your account and queried
-through Athena. StrataCLI delegates to the `stratabi-dev` CLI (which owns the demo),
+through Athena. StrataCTL delegates to the `stratabi-dev` CLI (which owns the demo),
 so the Apache-licensed CLI never imports the SGCL-licensed Dev Edition.
 
 ```bash
-stratacli dev demo install --profile <profile> --region <region>   # confirm; --yes to skip
-stratacli dev demo status
-stratacli dev demo remove
+stratactl dev demo install --profile <profile> --region <region>   # confirm; --yes to skip
+stratactl dev demo status
+stratactl dev demo remove
 ```
 
 Creates only an isolated demo namespace (`s3://<bucket>/demo/forgeworks/v1/`, Glue
@@ -97,9 +97,9 @@ only that namespace. Small AWS charges may apply; no data is sent to Shaleio. Re
 ## Configuration
 
 The StrataHQ location is a literal in exactly one place —
-`stratacli/src/strata/config/defaults.toml`. Everything resolves through
+`stratactl/src/strata/config/defaults.toml`. Everything resolves through
 `strata.config.provider.load_settings()` in this precedence (highest first):
-CLI flag → env (`STRATA_*`) → local file (`./.stratacli.toml`, `~/.stratacli/config.toml`)
+CLI flag → env (`STRATA_*`) → local file (`./.stratactl.toml`, `~/.stratactl/config.toml`)
 → AWS SSM (`/strataci/hq/*`) → packaged defaults.
 
 ## Versioning

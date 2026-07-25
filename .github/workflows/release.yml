@@ -1,4 +1,4 @@
-# StrataCLI — build + validate on tag (publish steps are gated / manual).
+# StrataCTL — build + validate on tag (publish steps are gated / manual).
 # Trusted Publishing (PyPI via GitHub OIDC) is prepared but NOT enabled here — no
 # long-lived tokens are stored. Enable the publish job only after an approved review.
 name: release
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: stratacli
+        working-directory: stratactl
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,12 +34,12 @@ jobs:
         run: |
           python -m venv /tmp/clean
           /tmp/clean/bin/python -m pip install dist/*.whl
-          /tmp/clean/bin/stratacli --help
-          /tmp/clean/bin/stratacli --version
+          /tmp/clean/bin/stratactl --help
+          /tmp/clean/bin/stratactl --version
       - uses: actions/upload-artifact@v4
         with:
-          name: stratacli-dist
-          path: stratacli/dist/*
+          name: stratactl-dist
+          path: stratactl/dist/*
 
   # Publish to PyPI via Trusted Publishing (OIDC — no API token stored). Gated by the
   # `pypi` GitHub Environment: add required reviewers there so a human approves each
@@ -55,7 +55,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: stratacli-dist
+          name: stratactl-dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         # For the first run, reserve the name on TestPyPI by uncommenting:

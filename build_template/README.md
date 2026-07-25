@@ -24,7 +24,7 @@ The runtime wheel is account-entitled, so you fetch it with your own credentials
 then hand it to the build:
 
 ```bash
-stratacli fetch-runtime --version 1.0.0            # -> ./dist/stratabi_runtime-1.0.0-py3-none-any.whl
+stratactl fetch-runtime --version 1.0.0            # -> ./dist/stratabi_runtime-1.0.0-py3-none-any.whl
 aws s3 cp ./dist/stratabi_runtime-1.0.0-py3-none-any.whl \
   s3://<your-bucket>/runtime/stratabi_runtime-1.0.0-py3-none-any.whl
 ```
@@ -45,8 +45,8 @@ aws codebuild start-build --project-name "$(terraform output -raw codebuild_proj
 terraform output -raw image_uri
 ```
 
-Hand `image_uri` to `stratacli init` as the runtime image, then
-`stratacli install-stratabi` deploys the platform infrastructure that runs it.
+Hand `image_uri` to `stratactl init` as the runtime image, then
+`stratactl install-stratabi` deploys the platform infrastructure that runs it.
 
 ## Variables
 
