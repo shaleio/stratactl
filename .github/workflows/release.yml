@@ -41,13 +41,23 @@ jobs:
           name: stratacli-dist
           path: stratacli/dist/*
 
-  # publish-pypi:
-  #   needs: build-and-validate
-  #   runs-on: ubuntu-latest
-  #   environment: pypi           # protect with required reviewers
-  #   permissions:
-  #     id-token: write            # OIDC → PyPI Trusted Publishing (no token secret)
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with: { name: stratacli-dist, path: dist }
-  #     - uses: pypa/gh-action-pypi-publish@release/v1
+  # Publish to PyPI via Trusted Publishing (OIDC — no API token stored). Gated by the
+  # `pypi` GitHub Environment: add required reviewers there so a human approves each
+  # release. Enable only after you've registered the Trusted Publisher on PyPI
+  # (see docs — publish/pypi-publishing.md). Point it at TestPyPI first with a
+  # `repository-url` to reserve the name.
+  publish-pypi:
+    needs: build-and-validate
+    runs-on: ubuntu-latest
+    environment: pypi            # protect with required reviewers in repo settings
+    permissions:
+      id-token: write            # OIDC -> PyPI Trusted Publishing (no token secret)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: stratacli-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # For the first run, reserve the name on TestPyPI by uncommenting:
+        # with:
+        #   repository-url: https://test.pypi.org/legacy/
