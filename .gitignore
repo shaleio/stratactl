@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# StrataCLI — .gitignore
+# ---------------------------------------------------------------------------
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Packaging / build outputs
+build/
+dist/
+*.egg-info/
+.eggs/
+*.whl
+*.tar.gz
+pip-wheel-metadata/
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# Terraform / OpenTofu — state, plans, provider binaries, local vars
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+terraform.tfvars
+*.auto.tfvars
+!*.tfvars.example
+# Root infra lock files ARE tracked intentionally (reproducible providers):
+!**/.terraform.lock.hcl
+
+# Local runner/build scratch
+*.zip
+
+# Editor / OS junk
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

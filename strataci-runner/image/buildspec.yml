@@ -30,7 +30,12 @@ phases:
             exit 2
           fi
           case "${STRATA_PKG}" in
-            s3://*) aws s3 cp "${STRATA_PKG}" /tmp/strata_pkg.whl && pip install "/tmp/strata_pkg.whl[runner]" ;;
+            s3://*)
+              # keep the real wheel filename — pip rejects a renamed wheel
+              WHL="/tmp/$(basename "${STRATA_PKG}")"
+              aws s3 cp "${STRATA_PKG}" "${WHL}"
+              pip install "${WHL}[runner]"
+              ;;
             *) pip install "${STRATA_PKG}" ;;
           esac
         fi

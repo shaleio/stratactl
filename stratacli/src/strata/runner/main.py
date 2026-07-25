@@ -50,28 +50,34 @@ def _scoped_deploy_env(session, m, region: str, state_bucket: str, lock_table: s
 
     from strata.runner import permissions
 
-    if not m.permissions_are_scoped:
-        print("runner: WARNING — module permissions are not structured; deploy scope will be broad "
-              "(legacy service:* grants). Structured required_permissions are required for third-party modules.",
-              flush=True)
-    if permissions.policy_too_large(m, state_bucket=state_bucket, lock_table=lock_table):
-        raise RuntimeError("module session policy exceeds the 2048-char inline limit; "
-                           "split required_permissions into managed policies (v2).")
+    assume_kwargs = {
+        "RoleArn": role_arn,
+        "RoleSessionName": f"strataci-{m.module_id[:48]}",
+        "DurationSeconds": 3600,
+    }
+    if m.permissions_are_scoped:
+        # Third-party / structured: narrow the broad deploy role to exactly what the
+        # module declared, via an inline session policy.
+        if permissions.policy_too_large(m, state_bucket=state_bucket, lock_table=lock_table):
+            raise RuntimeError("module session policy exceeds the inline limit; "
+                               "split required_permissions into managed policies (v2).")
+        assume_kwargs["Policy"] = permissions.policy_json(
+            m, state_bucket=state_bucket, lock_table=lock_table)
+        note = f"module-scoped session policy ({len(m.required_permissions)} declared grant(s))"
+    else:
+        # Simple form = Shaleio-internal / first-party per the manifest contract. Its
+        # broad service:* grants don't fit an inline session policy, and scoping a
+        # trusted, signed first-party bundle adds little — assume the FULL deploy role.
+        note = "full deploy role (first-party simple permissions — no session-policy narrowing)"
 
-    creds = session.client("sts").assume_role(
-        RoleArn=role_arn,
-        RoleSessionName=f"strataci-{m.module_id[:48]}",
-        Policy=permissions.policy_json(m, state_bucket=state_bucket, lock_table=lock_table),
-        DurationSeconds=3600,
-    )["Credentials"]
+    creds = session.client("sts").assume_role(**assume_kwargs)["Credentials"]
 
     env = dict(os.environ)
     env["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
     env["AWS_SECRET_ACCESS_KEY"] = creds["SecretAccessKey"]
     env["AWS_SESSION_TOKEN"] = creds["SessionToken"]
     env["AWS_DEFAULT_REGION"] = region
-    print(f"runner: assumed deploy role with module-scoped session policy "
-          f"({len(m.required_permissions)} declared grant(s)).", flush=True)
+    print(f"runner: assumed deploy role — {note}.", flush=True)
     return env
 
 
@@ -148,6 +154,18 @@ def main() -> int:
         defaults = workdir / "config" / "defaults.json"
         if defaults.is_file():
             shutil.copyfile(defaults, tofu_dir / "defaults.auto.tfvars.json")
+
+        # Customer tfvars uploaded by the CLI at install time (best-effort). Written as
+        # zz-customer.auto.tfvars.json so tofu auto-loads it AFTER defaults.auto.tfvars.json
+        # (lexical order), letting the customer's `strata init` values override the
+        # bundle's baked defaults. Persisted in the customer bucket, so destroy reuses it.
+        cust_key = f"config/{module_id}.auto.tfvars.json"
+        try:
+            obj = s3.get_object(Bucket=state_bucket, Key=cust_key)
+            (tofu_dir / "zz-customer.auto.tfvars.json").write_bytes(obj["Body"].read())
+            print(f"runner: applied customer tfvars {cust_key}", flush=True)
+        except Exception:  # noqa: BLE001 — missing key is normal for var-less modules
+            print(f"runner: no customer tfvars at {cust_key} (bundle defaults only)", flush=True)
 
         # 5. assume the module-scoped deploy role (Decision A), then run tofu
         deploy_env = _scoped_deploy_env(session, m, region, state_bucket, lock_table)

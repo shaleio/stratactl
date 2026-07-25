@@ -13,8 +13,6 @@ locals {
   ecr_repo = var.ecr_repo_name != "" ? var.ecr_repo_name : "${var.name_prefix}-runtime"
 }
 
-data "aws_region" "here" {}
-
 resource "aws_ecr_repository" "runtime" {
   name                 = local.ecr_repo
   image_tag_mutability = "MUTABLE"
@@ -99,7 +97,7 @@ resource "aws_codebuild_project" "image" {
 
     environment_variable {
       name  = "AWS_REGION"
-      value = data.aws_region.here.name
+      value = var.region
     }
     environment_variable {
       name  = "ECR_URI"

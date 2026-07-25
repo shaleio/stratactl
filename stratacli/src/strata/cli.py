@@ -30,6 +30,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub = p.add_subparsers(dest="command", required=True)
 
+    # Bootstrap StrataCI into the customer account, and the Developer Edition
+    # lifecycle group. Imported lazily-safe: these only build argparse here.
+    from strata.commands import bootstrap as _bootstrap, dev as _dev
+    _bootstrap.add_parser(sub)
+    _dev.add_parser(sub)
+
     sp = sub.add_parser("install", help="Install a module.")
     sp.add_argument("module", help="Module id (or 'source/module', or an s3:// URI).")
     sp.add_argument("--env", default="dev", help="Target environment label (maps to profile/conventions).")
@@ -52,9 +58,12 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--to", dest="version", default="latest")
     sp.add_argument("--yes", action="store_true")
 
-    sp = sub.add_parser("install-stratabi-dev", help="Install StrataBI Developer/Community edition.")
+    sp = sub.add_parser("install-stratabi-dev", help="Install StrataBI Developer/Community edition (no StrataHQ contract).")
     sp.add_argument("--env", default="dev")
     sp.add_argument("--to", dest="version", default="latest")
+    sp.add_argument("--source", default=None,
+                    help="HQ-free artifact source: a public URL (https://.../stratabi_dev.zip, "
+                         "e.g. a GitHub release), an s3:// URI, or 'customer_s3' (default: your bucket).")
     sp.add_argument("--yes", action="store_true")
 
     sub.add_parser("list", help="List installed modules.")
@@ -126,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
         from strata import commands
 
         dispatch = {
+            "bootstrap": lambda: commands.bootstrap.run(settings, args),
+            "dev": lambda: commands.dev.run(settings, args),
             "install": lambda: commands.install.run(settings, args),
             "install-stratabi": lambda: commands.platform.run_enterprise(settings, args),
             "install-stratabi-dev": lambda: commands.platform.run_dev(settings, args),

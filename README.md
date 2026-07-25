@@ -9,13 +9,22 @@ artifacts. No long-lived Shaleio credentials ever enter a customer account.
 stratacli install iceberg-explorer --source stratahq --env dev
 ```
 
-## The three layers
+## What's in this repo
 
-| Dir | Layer | What it is |
-|---|---|---|
-| `stratacli/` | **StrataCLI** | Local Python CLI (+ the runner program — one shared `strata` package). |
-| `strataci-runner/` | **StrataCI Runner** | The ephemeral execution surface: CodeBuild `buildspec`/`Dockerfile` + the customer-account Terraform (S3, DynamoDB, IAM, CodeBuild project). |
-| `stratahq/` | **StrataHQ** | Shaleio control plane: artifacts bucket + the **DynamoDB entitlement gate** + entitlement Lambda/API + SSM discovery. |
+| Dir | Layer | What it is | Docs |
+|---|---|---|---|
+| `stratacli/` | **StrataCLI** | Local Python CLI (+ the runner program — one shared `strata` package). | [README](stratacli/README.md) |
+| `strataci-runner/` | **StrataCI Runner** | The ephemeral execution surface: CodeBuild `buildspec`/`Dockerfile` + the customer-account Terraform (S3, DynamoDB, IAM, CodeBuild project). | [README](strataci-runner/README.md) |
+| `build_template/` | **Image build (reference)** | Optional CodeBuild pipeline that builds the StrataBI runtime image from the entitled wheel and pushes it to your ECR. | [README](build_template/README.md) |
+
+> **StrataHQ** — Shaleio's control plane (artifacts bucket + the DynamoDB entitlement
+> gate + entitlement Lambda/API + SSM discovery) — lives in its own internal repo.
+
+### End-to-end standup (Enterprise)
+
+1. **Scaffold the runner** once per account — [`strataci-runner`](strataci-runner/README.md).
+2. **Build the runtime image** → ECR — [`build_template`](build_template/README.md).
+3. **Configure + deploy** — [`stratacli`](stratacli/README.md): `stratacli init` → `stratacli install-stratabi`.
 
 ## Credential boundary (the core idea)
 
@@ -64,6 +73,27 @@ stratacli install iceberg-explorer --source stratahq --env dev
 stratacli list
 ```
 
+## ForgeWorks AWS demo
+
+Once a StrataBI Dev data plane is installed (`stratacli dev install`), you can stand
+up the **ForgeWorks AWS Demo** — synthetic data uploaded to your account and queried
+through Athena. StrataCLI delegates to the `stratabi-dev` CLI (which owns the demo),
+so the Apache-licensed CLI never imports the SGCL-licensed Dev Edition.
+
+```bash
+stratacli dev demo install --profile <profile> --region <region>   # confirm; --yes to skip
+stratacli dev demo status
+stratacli dev demo remove
+```
+
+Creates only an isolated demo namespace (`s3://<bucket>/demo/forgeworks/v1/`, Glue
+database `stratabi_dev_demo`, the `forgeworks_athena_demo` dashboard); removal deletes
+only that namespace. Small AWS charges may apply; no data is sent to Shaleio. Requires
+`pipx install stratabi-dev`.
+
+> Quick Demo validates the local StrataBI experience. AWS Demo validates the
+> customer-owned Athena data plane.
+
 ## Configuration
 
 The StrataHQ location is a literal in exactly one place —
@@ -71,6 +101,15 @@ The StrataHQ location is a literal in exactly one place —
 `strata.config.provider.load_settings()` in this precedence (highest first):
 CLI flag → env (`STRATA_*`) → local file (`./.stratacli.toml`, `~/.stratacli/config.toml`)
 → AWS SSM (`/strataci/hq/*`) → packaged defaults.
+
+## Versioning
+
+Shaleio versions are **`Major.Sprint.Patch`**, not SemVer. The middle number is the
+Shaleio **sprint** the release was cut in — a shared 2-week clock across the whole
+ecosystem (Sprint 0 begins 2026-07-27), so it is the same for every Shaleio project
+released in that sprint. `PATCH` increments within a sprint; `MAJOR` is a deliberate
+milestone. The versions remain valid `MAJOR.MINOR.PATCH` triples, so SemVer tooling
+parses them fine — the middle number just carries ecosystem meaning.
 
 ## Status
 

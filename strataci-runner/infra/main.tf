@@ -203,10 +203,17 @@ resource "aws_iam_role_policy" "deploy" {
       {
         Sid    = "BroadDeployNarrowedBySessionPolicy",
         Effect = "Allow",
+        # Broad on purpose — the runner assumes this role WITH a module-scoped
+        # session policy, so effective perms = this ∩ the module's declared scope.
+        # Must be a SUPERSET of everything any module/platform declares, incl. the
+        # StrataBI platform's VPC/ECS/ALB/Cognito/security services.
         Action = [
           "s3:*", "dynamodb:*", "lambda:*", "iam:*", "logs:*",
           "athena:*", "glue:*", "sqs:*", "events:*", "cloudwatch:*",
-          "ssm:*", "states:*", "apigateway:*", "ecr:*", "kms:*"
+          "ssm:*", "states:*", "apigateway:*", "ecr:*", "kms:*",
+          "ec2:*", "ecs:*", "elasticloadbalancing:*",
+          "cognito-idp:*", "cognito-identity:*", "application-autoscaling:*",
+          "guardduty:*", "inspector2:*", "securityhub:*", "sts:*"
         ],
         Resource = "*"
       }

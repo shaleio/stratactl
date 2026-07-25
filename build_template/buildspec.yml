@@ -12,15 +12,17 @@ phases:
   pre_build:
     commands:
       - echo "Fetching entitled runtime wheel from s3://$WHEEL_BUCKET/$WHEEL_KEY"
-      - aws s3 cp "s3://$WHEEL_BUCKET/$WHEEL_KEY" runtime.whl
+      # Keep the wheel's real filename — pip rejects a renamed wheel
+      # ("not a valid wheel filename"). Install via a *.whl glob.
+      - aws s3 cp "s3://$WHEEL_BUCKET/$WHEEL_KEY" "$(basename "$WHEEL_KEY")"
       - REGISTRY="${ECR_URI%%/*}"
       - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
       - |
         cat > Dockerfile <<DOCKER
         FROM ${BASE_IMAGE}
         WORKDIR /app
-        COPY runtime.whl /tmp/runtime.whl
-        RUN pip install --no-cache-dir /tmp/runtime.whl && rm -f /tmp/runtime.whl
+        COPY *.whl /tmp/
+        RUN pip install --no-cache-dir /tmp/*.whl && rm -f /tmp/*.whl
         EXPOSE 8050
         CMD ["python", "-m", "stratabi.app"]
         DOCKER

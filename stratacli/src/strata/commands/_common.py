@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from strata import hq
-from strata.artifacts.source import KIND_STRATAHQ, resolve_source
+from strata.artifacts.source import KIND_PUBLIC, KIND_STRATAHQ, resolve_source
 from strata.aws import session as aws_session
 from strata.config.models import Settings
 from strata.errors import StrataError
@@ -59,13 +59,16 @@ def _upload_tfvars(sess, bucket: str, module_id: str, data: dict) -> Optional[st
 
 
 def launch(settings: Settings, *, action: str, module_spec: str, version: str,
-           cli_source: Optional[str] = None) -> int:
+           cli_source: Optional[str] = None, module_id_override: Optional[str] = None) -> int:
     sess = aws_session.make_session(settings)
     account = aws_session.account_id(sess)
     bucket = settings.resolved_bucket(account)
 
     src = resolve_source(module_spec, settings, cli_source)
-    module_id = src.module_id
+    # A public/explicit-URL spec derives its module_id from the URL filename, which
+    # need not match the real module (e.g. a GitHub release asset). Callers that know
+    # the true id (the dev-edition install command) pass it explicitly.
+    module_id = module_id_override or src.module_id
 
     # For destroy we operate on the installed version's tofu. Where that tofu lives
     # depends on the delivery mode recorded at install time:
@@ -107,6 +110,16 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
             artifact_env["STRATA_ARTIFACT_SIGNATURE"] = ent.signature
         version = ent.version
         print(f"entitled: {module_id}@{version} (StrataHQ)")
+    elif src.kind == KIND_PUBLIC:
+        # Public artifact (e.g. a GitHub release of the source-available dev edition).
+        # Fetched directly over https by the runner — NO StrataHQ contact, no
+        # entitlement, no token. Signature verification still applies if configured.
+        if not src.public_url:
+            raise StrataError("public source requires an http(s) URL")
+        artifact_env = {"STRATA_ARTIFACT_URL": src.public_url}
+        if src.sha256:
+            artifact_env["STRATA_ARTIFACT_SHA256"] = src.sha256
+        print(f"public source: {module_id}@{version} ({src.public_url})")
     else:  # customer_s3
         uri = src.customer_s3_uri or f"s3://{bucket}/artifacts/{module_id}/{version}/module.zip"
         artifact_env = {"STRATA_ARTIFACT_S3": uri}
