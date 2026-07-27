@@ -3,7 +3,29 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
-## [Unreleased]
+## [1.0.1] — 2026-07-26
+
+### Fixed
+- **Bootstrap**: the runner buildspec is now inlined into the packaged infra
+  (`bootstrap/infra/buildspec.yml`, referenced via `${path.module}/buildspec.yml`) so
+  `tofu` no longer fails on an out-of-module `file()` path.
+- **Bootstrap**: pass `AWS_PROFILE`/`AWS_REGION` into the `tofu` subprocess, so StrataCI
+  is created in the account the CLI validated instead of silently falling back to the
+  default provider chain.
+- **Runner**: install the `strata` package on a standard CodeBuild image via a per-build
+  `STRATA_PKG` (defaults to the `stratactl` PyPI dist; override with `STRATA_RUNNER_PKG`);
+  fixed the inconsistent empty `strata_pkg` default that broke installs on a standard image.
+- **Runner**: inject an `s3` backend when a module bundle declares none, so tofu state
+  persists in the customer bucket across the ephemeral CodeBuild runner (fixes "already
+  exists" errors on re-apply / update / uninstall).
+- **`dev configure-local`**: writes the data plane's `env_file_preview` block, so the
+  generated `.env` carries the full `STRATABI_*` settings (previously only region/profile).
+
+### Changed
+- `bootstrap_infra_files()` also lists `.yml`/`.yaml` packaged assets.
+- Synced `strata.__version__` (was stale at `0.1.0`) to the release version.
+
+## [1.0.0] — 2026-07-26
 
 ### Added
 - `stratactl bootstrap` — stand StrataCI up in a customer AWS account (validates

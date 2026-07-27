@@ -35,8 +35,8 @@ variable "runner_compute_type" {
 
 variable "strata_pkg" {
   type        = string
-  description = "How the runner installs the strata package when not prebaked: an s3:// wheel URI or a pip requirement. Empty if the image already has it."
-  default     = ""
+  description = "How the runner installs the strata package when not prebaked: an s3:// wheel URI or a pip requirement. Empty only if the image already has it. Defaults to the PyPI dist (import package `strata`); the CLI also sends this per-build (STRATA_RUNNER_PKG) so it tracks the launching version."
+  default     = "stratactl"
 }
 
 variable "tofu_version" {

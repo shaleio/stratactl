@@ -25,5 +25,5 @@ def bootstrap_infra_files() -> list[str]:
     root = bootstrap_infra_root()
     return sorted(
         p.name for p in root.iterdir()
-        if p.name.endswith((".tf", ".tftpl", ".hcl")) or p.name.endswith(".example")
+        if p.name.endswith((".tf", ".tftpl", ".hcl", ".yml", ".yaml")) or p.name.endswith(".example")
     )

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -168,6 +169,23 @@ def main() -> int:
             print(f"runner: no customer tfvars at {cust_key} (bundle defaults only)", flush=True)
 
         # 5. assume the module-scoped deploy role (Decision A), then run tofu
+
+        # CodeBuild is ephemeral by design — local tofu state would vanish with the
+        # container, so a re-apply/update/uninstall would start from empty state and
+        # collide with the resources the first run created ("already exists"). tofu's
+        # S3 backend solves this natively: it pulls remote state from S3 on `init` and
+        # pushes on `apply`, with the DynamoDB table as a lock. But the -backend-config
+        # flags below are inert unless the config DECLARES a backend. Infra authored for
+        # local use (e.g. the dev edition) doesn't, so inject one — but only when the
+        # bundle declares none, since two backend blocks is a hard error.
+        _tf_src = "".join(p.read_text(encoding="utf-8", errors="ignore")
+                          for p in sorted(tofu_dir.glob("*.tf")))
+        if not re.search(r'backend\s+"[^"]+"\s*\{', _tf_src):
+            (tofu_dir / "zz_strataci_backend.tf").write_text(
+                'terraform {\n  backend "s3" {}\n}\n', encoding="utf-8")
+            print("runner: injected S3 backend (module declared none) — state will "
+                  "persist in the customer bucket", flush=True)
+
         deploy_env = _scoped_deploy_env(session, m, region, state_bucket, lock_table)
 
         backend = [

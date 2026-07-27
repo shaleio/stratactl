@@ -77,7 +77,7 @@ stratactl list
 
 Once a StrataBI Dev data plane is installed (`stratactl dev install`), you can stand
 up the **ForgeWorks AWS Demo** — synthetic data uploaded to your account and queried
-through Athena. StrataCTL delegates to the `stratabi-dev` CLI (which owns the demo),
+through Athena. StrataCTL delegates to the `stratabi` CLI (which owns the demo),
 so the Apache-licensed CLI never imports the SGCL-licensed Dev Edition.
 
 ```bash
@@ -89,7 +89,7 @@ stratactl dev demo remove
 Creates only an isolated demo namespace (`s3://<bucket>/demo/forgeworks/v1/`, Glue
 database `stratabi_dev_demo`, the `forgeworks_athena_demo` dashboard); removal deletes
 only that namespace. Small AWS charges may apply; no data is sent to Shaleio. Requires
-`pipx install stratabi-dev`.
+`pipx install stratabi`.
 
 > Quick Demo validates the local StrataBI experience. AWS Demo validates the
 > customer-owned Athena data plane.

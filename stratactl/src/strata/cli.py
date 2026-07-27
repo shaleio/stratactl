@@ -148,7 +148,10 @@ def main(argv: list[str] | None = None) -> int:
             "dashboards": lambda: commands.dashboards.run(settings, args),
             "fetch-runtime": lambda: commands.fetch_runtime.run(settings, args),
         }
-        return int(dispatch[args.command]() or 0)
+        rc = int(dispatch[args.command]() or 0)
+        if rc == 0:
+            print("done 🐒🔨")   # Shaleio / MonkeyHammer
+        return rc
     except StrataError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

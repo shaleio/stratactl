@@ -255,7 +255,7 @@ resource "aws_codebuild_project" "runner" {
 
   source {
     type      = "NO_SOURCE"
-    buildspec = file("${path.module}/../image/buildspec.yml")
+    buildspec = file("${path.module}/buildspec.yml")
   }
 
   logs_config {

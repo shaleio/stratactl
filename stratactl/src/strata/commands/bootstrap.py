@@ -18,6 +18,7 @@ applies when --run AND (--yes or an interactive "yes"). It never applies silentl
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -37,6 +38,24 @@ def _tofu_bin() -> str | None:
         if shutil.which(exe):
             return exe
     return None
+
+
+def _tofu_env(settings) -> dict:
+    """Environment for the tofu subprocess so it targets the SAME account the CLI
+    validated. The CLI's --profile only drives boto3; tofu reads AWS creds from its
+    own environment, so without this it silently falls back to the default provider
+    chain — deploying StrataCI into the wrong account while the CLI prints the right
+    one. When a profile is given we also drop any static keys inherited from the
+    environment, since those take precedence over AWS_PROFILE."""
+    env = dict(os.environ)
+    if settings.profile:
+        env["AWS_PROFILE"] = settings.profile
+        for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+            env.pop(k, None)
+    if settings.region:
+        env["AWS_REGION"] = settings.region
+        env["AWS_DEFAULT_REGION"] = settings.region
+    return env
 
 
 def _working_dir(account: str, region: str) -> Path:
@@ -97,8 +116,9 @@ def run(settings, args) -> int:
     if not tofu:
         raise StrataError("OpenTofu/Terraform not found on PATH; cannot --run.")
 
-    subprocess.run([tofu, "init", "-input=false"], cwd=wd, check=True)
-    subprocess.run([tofu, "plan", "-input=false", "-out=tfplan"], cwd=wd, check=True)
+    tenv = _tofu_env(settings)
+    subprocess.run([tofu, "init", "-input=false"], cwd=wd, check=True, env=tenv)
+    subprocess.run([tofu, "plan", "-input=false", "-out=tfplan"], cwd=wd, check=True, env=tenv)
 
     if not getattr(args, "yes", False):
         resp = input("\nApply this StrataCI bootstrap plan? [y/N] ").strip().lower()
@@ -106,7 +126,7 @@ def run(settings, args) -> int:
             print("aborted — plan saved, nothing applied.")
             return 0
 
-    subprocess.run([tofu, "apply", "-input=false", "tfplan"], cwd=wd, check=True)
+    subprocess.run([tofu, "apply", "-input=false", "tfplan"], cwd=wd, check=True, env=tenv)
     print("\nStrataCI bootstrap applied. Next: `stratactl dev install`.")
     # NOTE (follow-up): upload the installed CLI/runner wheel to the created bucket
     # and validate the CodeBuild runner. Tracked in PUBLISH_READINESS.md.

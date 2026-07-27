@@ -4,6 +4,7 @@ entitlement, launch the CodeBuild runner, stream logs."""
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -151,6 +152,14 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         "STRATA_JOBS_TABLE": settings.customer.jobs_table,
         **artifact_env,
     }
+
+    # The runner must have the `strata` package to execute the job. On a standard
+    # CodeBuild image it isn't present, so tell the buildspec how to install it
+    # (imported as `strata`, distributed on PyPI as `stratactl`). Overridable to
+    # pin a version or point at an s3:// wheel via STRATA_RUNNER_PKG. Harmless on a
+    # prebaked image — the buildspec skips the install when `import strata` already
+    # succeeds. Sent per-build so it always tracks the launching CLI, no re-bootstrap.
+    env["STRATA_PKG"] = os.getenv("STRATA_RUNNER_PKG", "stratactl")
 
     # Bundle-signing config (Decision C). Verification is offline in the runner.
     if settings.hq.public_key:

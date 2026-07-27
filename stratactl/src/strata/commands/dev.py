@@ -81,33 +81,43 @@ def run(settings, args) -> int:
         lines = [f"AWS_REGION={settings.region}"]
         if settings.profile:
             lines.append(f"AWS_PROFILE={settings.profile}")
-        for k in _LOCAL_KEYS:
-            if k in outputs:
-                lines.append(f"{k}={outputs[k]}")
+        # The data-plane tofu emits a ready-made STRATABI_* block as `env_file_preview`
+        # (non-secret: bucket/prefixes/ARNs/table names). Prefer it — it is the canonical,
+        # complete set the runtime needs. Fall back to mapping the individual _LOCAL_KEYS
+        # for older bundles that don't publish the preview.
+        preview = str(outputs.get("env_file_preview") or "").strip()
+        if preview:
+            lines.append(preview)
+        else:
+            for k in _LOCAL_KEYS:
+                if k in outputs:
+                    lines.append(f"{k}={outputs[k]}")
         body = "# StrataBI Dev — non-secret local config (written by `stratactl dev " \
                "configure-local`).\n# AWS credentials are NOT written here; use your " \
                "profile / provider chain.\n" + "\n".join(lines) + "\n"
         out = getattr(args, "out", None) or ".env"
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(body)
-        print(f"wrote {len([l for l in lines])} settings to {out} (no secrets).")
+        n = sum(1 for ln in body.splitlines() if "=" in ln and not ln.lstrip().startswith("#"))
+        print(f"wrote {n} settings to {out} (no secrets).")
         return 0
 
     raise StrataError(f"unknown dev action: {action}")
 
 
 def _demo(settings, args) -> int:
-    """ForgeWorks AWS demo lifecycle. Delegates to the `stratabi-dev` CLI (which owns
-    the demo logic) so StrataCTL does not import the SGCL-licensed Dev Edition."""
+    """ForgeWorks AWS demo lifecycle. Delegates to the `stratabi` CLI (the Developer
+    Edition, which owns the demo logic) so StrataCTL does not import the SGCL-licensed
+    Dev Edition."""
     import shutil
     import subprocess
-    if not shutil.which("stratabi-dev"):
+    if not shutil.which("stratabi"):
         raise StrataError(
-            "ForgeWorks demo requires the Developer Edition. Install it:\n"
-            "    pipx install stratabi-dev\n"
+            "ForgeWorks demo requires the StrataBI Developer Edition. Install it:\n"
+            "    pipx install stratabi\n"
             "then: stratactl dev demo install")
     sub = {"install": "install", "remove": "remove", "status": "status"}[args.demo_action]
-    cmd = ["stratabi-dev", "demo", "aws", sub]
+    cmd = ["stratabi", "demo", "aws", sub]
     if getattr(args, "profile", None) or settings.profile:
         cmd += ["--profile", args.profile or settings.profile]
     region = getattr(args, "region", None) or settings.region
