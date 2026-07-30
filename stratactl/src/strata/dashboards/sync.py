@@ -141,16 +141,27 @@ def push(session, *, bucket: str, registry_table: str, pinned_table: Optional[st
         entry = manifest.get(slug)
         body = json.dumps(data, indent=2).encode("utf-8")
 
-        if new or entry is None:
+        if new:
+            # Git flow: mint a fresh versioned artifact and register it for pull/diff.
             dashboard_id = str(data.get("id") or slug)
             key = _new_dashboard_key(prefix, dashboard_id)
             etag = _put_object(s3, bucket, key, body)
-            if git_register or new:
-                _put_registry(session, registry_table, key, dashboard_id, by="stratactl")
+            _put_registry(session, registry_table, key, dashboard_id, by="stratactl")
             if pinned and pinned_table:
                 _put_pinned(session, pinned_table, key, dashboard_id)
             manifest[slug] = {"s3_key": key, "dashboard_id": dashboard_id, "etag": etag}
             pushed.append(f"{slug} -> NEW {key}")
+        elif entry is None:
+            # Generic push: flat key by name, no git registry required. This is the
+            # simple funnel — the app loads <prefix>/<name>.json in STRATABI_MODE=aws.
+            # Opt into git tracking with --git-registered.
+            dashboard_id = str(data.get("id") or slug)
+            key = f"{prefix.strip('/')}/{slug}.json"
+            etag = _put_object(s3, bucket, key, body)
+            if git_register and registry_table:
+                _put_registry(session, registry_table, key, dashboard_id, by="stratactl")
+            manifest[slug] = {"s3_key": key, "dashboard_id": dashboard_id, "etag": etag}
+            pushed.append(f"{slug} -> {key}")
         else:
             key = entry["s3_key"]
             if not force:
@@ -166,7 +177,12 @@ def push(session, *, bucket: str, registry_table: str, pinned_table: Optional[st
                 _put_pinned(session, pinned_table, key, entry["dashboard_id"])
             pushed.append(f"{slug} -> {key}")
 
-    _save_manifest(local_dir, manifest)
+    # Persist the manifest only when local_dir is a real git working dir (it exists
+    # after `pull`) or a git-flow op ran. A one-off generic push shouldn't spawn a
+    # stray ./dashboards/ directory just to drop a manifest.
+    if local_dir.exists() or new or git_register:
+        local_dir.mkdir(parents=True, exist_ok=True)
+        _save_manifest(local_dir, manifest)
     return pushed
 
 
@@ -196,31 +212,40 @@ def diff(session, *, bucket: str, registry_table: str, local_dir: Path) -> list[
 # helpers
 # --------------------------------------------------------------------------- #
 def _validate(data: dict, path: Path) -> None:
-    """Validate against the bundled/published dashboard schema if jsonschema is
-    available; a missing validator never blocks a push (warn-only)."""
+    """Validate against the packaged dashboard schema when jsonschema is available.
+    A missing validator/schema never blocks a push (silent no-op)."""
     try:
-        import jsonschema  # noqa: F401
+        import jsonschema
     except ModuleNotFoundError:
         return
     schema = _load_schema()
     if not schema:
         return
-    from jsonschema import Draft7Validator
-    errors = sorted(Draft7Validator(schema).iter_errors(data), key=lambda e: list(e.path))
-    if errors:
-        first = errors[0]
-        raise StrataError(f"{path.name} fails dashboard schema: {first.message} (at {list(first.path)})")
+    try:
+        # validate() selects the correct draft from the schema's $schema (2020-12).
+        jsonschema.validate(data, schema)
+    except jsonschema.ValidationError as e:
+        loc = "/".join(str(p) for p in e.absolute_path) or "(root)"
+        raise StrataError(
+            f"{path.name} fails dashboard schema at {loc}: {e.message}") from None
 
 
 def _load_schema() -> Optional[dict]:
-    # Best effort: a schema file next to the package or under ./schemas.
-    for cand in (Path(__file__).resolve().parents[3] / "schemas" / "dashboard.schema.json",
-                 Path.cwd() / "dashboard.schema.json"):
-        if cand.is_file():
-            try:
-                return json.loads(cand.read_text("utf-8"))
-            except Exception:
-                return None
+    """The dashboard schema ships as package data (strata/dashboards/dashboard.schema.json).
+    Falls back to a dashboard.schema.json in the cwd for local overrides."""
+    try:
+        from importlib.resources import files
+        res = files("strata.dashboards").joinpath("dashboard.schema.json")
+        if res.is_file():
+            return json.loads(res.read_text("utf-8"))
+    except Exception:
+        pass
+    cand = Path.cwd() / "dashboard.schema.json"
+    if cand.is_file():
+        try:
+            return json.loads(cand.read_text("utf-8"))
+        except Exception:
+            return None
     return None
 
 

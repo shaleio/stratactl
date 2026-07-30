@@ -78,20 +78,29 @@ def run(settings, args) -> int:
         if not rec or rec.get("status") == installs.REMOVED:
             raise StrataError("StrataBI Dev is not installed; run `stratactl dev install` first.")
         outputs = rec.get("outputs") or {}
-        lines = [f"AWS_REGION={settings.region}"]
+
+        def _val(v):
+            # `tofu output -json` wraps each output as {"value":..,"type":..,"sensitive":..};
+            # the runner stores it verbatim. Unwrap to the bare value.
+            return v.get("value") if isinstance(v, dict) else v
+
+        # Write both AWS_REGION and AWS_DEFAULT_REGION: older botocore (e.g. the one in
+        # some conda envs) only resolves a client's region from AWS_DEFAULT_REGION, so
+        # AWS_REGION alone passes `--check` but the app still raises NoRegionError.
+        lines = [f"AWS_REGION={settings.region}", f"AWS_DEFAULT_REGION={settings.region}"]
         if settings.profile:
             lines.append(f"AWS_PROFILE={settings.profile}")
         # The data-plane tofu emits a ready-made STRATABI_* block as `env_file_preview`
         # (non-secret: bucket/prefixes/ARNs/table names). Prefer it — it is the canonical,
         # complete set the runtime needs. Fall back to mapping the individual _LOCAL_KEYS
         # for older bundles that don't publish the preview.
-        preview = str(outputs.get("env_file_preview") or "").strip()
+        preview = str(_val(outputs.get("env_file_preview")) or "").strip()
         if preview:
             lines.append(preview)
         else:
             for k in _LOCAL_KEYS:
                 if k in outputs:
-                    lines.append(f"{k}={outputs[k]}")
+                    lines.append(f"{k}={_val(outputs[k])}")
         body = "# StrataBI Dev — non-secret local config (written by `stratactl dev " \
                "configure-local`).\n# AWS credentials are NOT written here; use your " \
                "profile / provider chain.\n" + "\n".join(lines) + "\n"

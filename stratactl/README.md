@@ -51,11 +51,17 @@ stratactl update <module> --to <version>
 stratactl uninstall <module>              # runs the module's tofu destroy (always available)
 stratactl list                            # what's installed + delivery mode
 stratactl logs <job-id>                   # tail/replay a runner build
-stratactl dashboards pull|push|list|diff  # git-sync dashboards (no runner needed)
+stratactl dashboards push <file>          # validate + upload a dashboard to analyst/dashboards/
+stratactl dashboards pull|list|diff       # dashboards-as-code: git-sync the registered set
 ```
 
 `--source stratahq` (default) fetches a signed bundle from Shaleio's control plane;
 `--source customer_s3` installs from your own bucket (offline / air-gapped).
+
+`dashboards` resolves the system bucket + git-registry table from the recorded
+`dev install` (no manual config). A plain `push <file>` needs only the bucket and
+validates against the packaged schema; the git-sync flow (`--new`/`pull`/`diff`) uses
+the registry for version control.
 
 ## End-to-end: deploy StrataBI Enterprise
 

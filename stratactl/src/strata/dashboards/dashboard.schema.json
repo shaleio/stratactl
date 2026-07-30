@@ -1,0 +1,1105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shaleio.com/schemas/stratabi/dashboard.v1.schema.json",
+  "title": "StrataBI Dashboard",
+  "type": "object",
+  "x-llm-instructions": "This schema defines the StrataBI dashboard contract. It is authorized only for generating valid StrataBI dashboard configurations. Dashboard JSON declares intent only. Infrastructure resolution, module lookup, Lambda ARN lookup, source value lookup, dependency ordering, trigger propagation, result loading, and execution orchestration are owned by StrataBI core. Output must be valid JSON only and strictly conform to this schema.",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "layout"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 140,
+      "description": "Human-friendly dashboard title."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0.0",
+      "description": "Optional schema/content version for future migrations."
+    },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "layout": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Dashboard tiles rendered as Bootstrap card columns grouped into rows.",
+      "items": {
+        "$ref": "#/$defs/tile"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, dashboard tiles may refresh on an interval."
+        },
+        "interval_ms": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 3600000,
+          "default": 60000,
+          "description": "Refresh interval in milliseconds."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "interval_enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "interval_enabled"
+            ]
+          },
+          "then": {
+            "required": [
+              "interval_ms"
+            ]
+          }
+        }
+      ],
+      "description": "Dashboard runtime settings. Theme selection is intentionally excluded; theme is owned by the app, account, user, or deployment environment."
+    },
+    "source_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "?source"
+      ],
+      "properties": {
+        "?source": {
+          "$ref": "#/$defs/identifier",
+          "description": "Source value identifier resolved by StrataBI core. Core owns lookup, retrieval, parsing, and field-level validation."
+        }
+      },
+      "description": "A dynamic value reference. This may replace supported scalar, object, or array values. The dashboard declares only the source id; StrataBI core resolves the actual value."
+    },
+    "result_kind": {
+      "type": "string",
+      "enum": [
+        "dataframe",
+        "artifact",
+        "json"
+      ],
+      "description": "Expected runtime result kind. Usually inferred from block type by StrataBI core."
+    },
+    "result_format": {
+      "type": "string",
+      "enum": [
+        "parquet",
+        "csv",
+        "json",
+        "html",
+        "md",
+        "png",
+        "jpg",
+        "jpeg",
+        "webp",
+        "svg"
+      ],
+      "description": "Expected runtime result artifact format. Usually inferred from block type by StrataBI core."
+    },
+    "result_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$",
+      "description": "Optional runtime result artifact filename, such as result.parquet or result.json."
+    },
+    "plotly_template_value": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Plotly template name such as plotly, plotly_white, plotly_dark, ggplot2, seaborn, simple_white, presentation, xgridoff, ygridoff, or gridon."
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ],
+      "description": "Plotly template name or ?source reference resolving to a Plotly template."
+    },
+    "style_object": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Dash style dictionary."
+    },
+    "string_or_source": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ]
+    },
+    "object_or_source": {
+      "oneOf": [
+        {
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ]
+    },
+    "number_or_source": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ]
+    },
+    "tile_dependency_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identifier"
+      },
+      "uniqueItems": true,
+      "default": [],
+      "description": "List of tile ids used by StrataBI core to manage dependency ordering and trigger propagation."
+    },
+    "load": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "always",
+            "load_once",
+            "manual",
+            "interval",
+            "input"
+          ],
+          "default": "load_once",
+          "description": "Controls when the tile executes relative to dashboard events. Static and cache tiles usually use load_once."
+        },
+        "indicator": {
+          "type": "string",
+          "enum": [
+            "none",
+            "auto",
+            "loading",
+            "spinner",
+            "status"
+          ],
+          "default": "auto",
+          "description": "Controls tile loading visual. Use none to avoid interval polling flicker."
+        },
+        "interval_ms": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 3600000,
+          "description": "Per-tile refresh interval in milliseconds, used when mode is 'interval'. If omitted, StrataBI falls back to the deployment default (STRATABI_DEFAULT_INTERVAL_MS, 60000)."
+        }
+      },
+      "description": "Controls tile load behavior, including execution trigger policy and loading visual."
+    },
+    "layout_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "order",
+        "width"
+      ],
+      "properties": {
+        "row": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Row grouping key. Tiles with the same row are rendered together."
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Sort order within a row."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Bootstrap column width."
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "description": "dbc.Card color token, CSS named color, CSS variable, or hex color value.",
+          "default": "light",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "primary",
+                "secondary",
+                "success",
+                "info",
+                "warning",
+                "danger",
+                "light",
+                "dark"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "show_header": {
+          "type": "boolean",
+          "default": true,
+          "description": "If false, suppress the card header even when title exists."
+        },
+        "outline": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, render the card in outline style (colored border, transparent fill) using the 'color' value instead of a solid fill. Pairs with a 'color' token."
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "download": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a download control (⤓) for the tile's produced runtime artifact. If omitted, the runtime shows it automatically on tiles that have an exec and are not input/control blocks; set false to suppress it there, or true to force it."
+        },
+        "label": {
+          "type": "string",
+          "default": "⤓",
+          "description": "Text shown on the artifact download control."
+        },
+        "filename": {
+          "type": "string",
+          "description": "Optional download filename override. If omitted, StrataBI uses the result artifact name."
+        }
+      },
+      "description": "Controls whether the tile exposes its produced runtime artifact for download."
+    },
+    "tile_controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_button": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a per-tile run button (▷) that triggers this tile's execution independently of the dashboard refresh. If omitted, the runtime shows it automatically on tiles that have an exec and are not input/control blocks; set false to suppress it, or true to force it. Best paired with load.mode = manual."
+        }
+      },
+      "description": "Per-tile UI controls."
+    },
+    "exec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "athena",
+            "cache",
+            "lambda"
+          ],
+          "default": "athena",
+          "description": "Governed execution mode for the tile."
+        },
+        "workgroup": {
+          "type": "string",
+          "description": "Optional governed Athena workgroup/profile override. Deployments may ignore or restrict this value. Standard dashboard queries should normally use StrataBI-managed workgroup selection."
+        },
+        "database": {
+          "type": "string",
+          "description": "Athena database to query."
+        },
+        "output_prefix": {
+          "type": "string",
+          "description": "Optional cache/output prefix under STRATABI_ATHENA_OUTPUT."
+        },
+        "result_kind": {
+          "$ref": "#/$defs/result_kind",
+          "description": "Optional override for the expected result kind. If omitted, StrataBI core infers this from the block type."
+        },
+        "result_format": {
+          "$ref": "#/$defs/result_format",
+          "description": "Optional override for the expected result format. If omitted, StrataBI core infers this from the block type."
+        },
+        "result_name": {
+          "$ref": "#/$defs/result_name",
+          "description": "Optional override for the runtime result artifact filename. If omitted, StrataBI core chooses a default such as result.parquet, result.json, result.html, result.md, or result.png."
+        },
+        "module_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Required when exec.type is lambda. Resolved at runtime through the StrataBI module registry."
+        },
+        "lambda_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Required when exec.type is lambda. Index of the Lambda function within a registered StrataBI module. Core resolves module_id + lambda_index into the actual Lambda ARN."
+        },
+        "cache_s3_uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Required when exec.type is cache."
+        },
+        "async": {
+          "type": "boolean",
+          "default": false,
+          "description": "Currently honored only when exec.type is athena. If true, StrataBI invokes the async Athena runner, which writes a normalized dataframe artifact to the status_context result location. For lambda execution, module Lambdas already use the status_context artifact flow. For cache execution, core directly reads cache_s3_uri."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lambda"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "module_id",
+              "lambda_index"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "cache"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "cache_s3_uri"
+            ]
+          }
+        }
+      ],
+      "description": "Execution mode for a BI tile. Lambda execution uses a registered module_id and required lambda_index, not raw Lambda ARNs."
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sql"
+      ],
+      "properties": {
+        "sql": {
+          "$ref": "#/$defs/text_or_lines_or_source",
+          "description": "Athena SQL text or a source value resolving to Athena SQL. Supports optional :param tokens resolved from dashboard input state."
+        },
+        "params": {
+          "type": "object",
+          "default": {},
+          "description": "Map of SQL parameter name to dashboard input key.",
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
+        }
+      },
+      "description": "Approved data retrieval contract for Athena-backed tiles."
+    },
+    "dropdown_option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "value"
+      ],
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "dropdown_options": {
+      "oneOf": [
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/dropdown_option"
+          }
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ],
+      "description": "Dropdown options may be specified inline or resolved dynamically through ?source."
+    },
+    "block_plotly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "plotly"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "figure"
+          ],
+          "properties": {
+            "figure": {
+              "oneOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Plotly figure spec. May be static or source-resolved."
+            },
+            "template": {
+              "$ref": "#/$defs/plotly_template_value",
+              "description": "Optional Plotly template. May be a literal template name or ?source reference."
+            },
+            "theme": {
+              "$ref": "#/$defs/plotly_template_value",
+              "description": "Alias for template. Optional Plotly template/theme value."
+            },
+            "height": {
+              "$ref": "#/$defs/string_or_source",
+              "description": "Optional graph height, such as 400px or 60vh."
+            },
+            "style": {
+              "$ref": "#/$defs/style_object",
+              "description": "Dash style dictionary applied to dcc.Graph. Plotly paper_bgcolor and plot_bgcolor default to transparent unless explicitly set in figure.layout."
+            },
+            "graph_config": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Plotly dcc.Graph config dictionary, such as displayModeBar or responsive."
+            }
+          }
+        }
+      }
+    },
+    "block_plotly_resampler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "plotly_resampler"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "figure"
+          ],
+          "properties": {
+            "figure": {
+              "oneOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Plotly figure spec used for resampled rendering. Figure may also be resolved through ?source."
+            },
+            "template": {
+              "$ref": "#/$defs/plotly_template_value",
+              "description": "Optional Plotly template. May be a literal template name or ?source reference."
+            },
+            "theme": {
+              "$ref": "#/$defs/plotly_template_value",
+              "description": "Alias for template. Optional Plotly template/theme value."
+            },
+            "height": {
+              "$ref": "#/$defs/string_or_source",
+              "description": "Optional graph height, such as 400px or 60vh."
+            },
+            "style": {
+              "$ref": "#/$defs/style_object",
+              "description": "Dash style dictionary applied to dcc.Graph. Plotly paper_bgcolor and plot_bgcolor default to transparent unless explicitly set in figure.layout."
+            },
+            "graph_config": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Plotly dcc.Graph config dictionary, such as displayModeBar or responsive."
+            }
+          }
+        }
+      }
+    },
+    "block_table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "table"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "height": {
+              "$ref": "#/$defs/string_or_source",
+              "default": "500px",
+              "description": "AG Grid height."
+            },
+            "page_size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 25,
+              "description": "Pagination page size."
+            },
+            "className": {
+              "type": "string",
+              "default": "ag-theme-alpine-dark",
+              "description": "AG Grid theme class."
+            },
+            "column_defs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "description": "Optional AG Grid columnDefs. If omitted, StrataBI infers fields from the dataframe columns."
+            },
+            "default_col_def": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "AG Grid defaultColDef."
+            },
+            "dash_grid_options": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Dash AG Grid options dictionary."
+            },
+            "style": {
+              "$ref": "#/$defs/style_object",
+              "description": "Dash style dictionary applied to AgGrid."
+            }
+          }
+        }
+      },
+      "description": "AG Grid table block. Runtime results are expected to be dataframe artifacts, usually parquet or csv."
+    },
+    "block_markdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "markdown"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "$ref": "#/$defs/text_or_lines_or_source",
+              "description": "Fallback Markdown content or a ?source value resolving to markdown/text content. Runtime-generated markdown artifacts may also be returned by execution status as result_kind=artifact and result_format=md."
+            },
+            "dangerously_allow_html": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, Markdown renderer may allow raw HTML. Use only for trusted content."
+            }
+          }
+        }
+      }
+    },
+    "block_image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "image"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "src"
+          ],
+          "properties": {
+            "src": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Image source URI/path or ?source value resolving to an image source. Runtime-generated image artifacts may also be returned by execution status as result_kind=artifact and result_format=png/jpg/webp/svg."
+            },
+            "alt": {
+              "type": "string",
+              "default": ""
+            },
+            "width": {
+              "$ref": "#/$defs/string_or_source",
+              "default": "100%",
+              "description": "Image width."
+            },
+            "style": {
+              "$ref": "#/$defs/style_object",
+              "description": "Dash style dictionary applied to html.Img."
+            }
+          }
+        }
+      }
+    },
+    "block_raw_html": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "raw_html"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "html"
+          ],
+          "properties": {
+            "html": {
+              "$ref": "#/$defs/text_or_lines_or_source",
+              "description": "Trusted fallback HTML content or a ?source value resolving to HTML text. Runtime-generated HTML artifacts may also be returned by execution status as result_kind=artifact and result_format=html."
+            },
+            "height": {
+              "$ref": "#/$defs/string_or_source",
+              "default": "500px",
+              "description": "Iframe height."
+            },
+            "style": {
+              "$ref": "#/$defs/style_object",
+              "description": "Dash style dictionary applied to html.Iframe."
+            }
+          }
+        }
+      }
+    },
+    "block_input_select": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "input_select"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input_id",
+            "options"
+          ],
+          "properties": {
+            "input_id": {
+              "$ref": "#/$defs/identifier",
+              "description": "Key stored in dashboard-input-store."
+            },
+            "label": {
+              "$ref": "#/$defs/string_or_source",
+              "description": "Input label or ?source value resolving to a string."
+            },
+            "component": {
+              "type": "string",
+              "enum": [
+                "dropdown",
+                "radio",
+                "checklist"
+              ],
+              "default": "dropdown",
+              "description": "Dash input component to render."
+            },
+            "options": {
+              "$ref": "#/$defs/dropdown_options",
+              "description": "Options may be inline, ?source-resolved, or replaced by runtime JSON results."
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Selected value. Runtime JSON results may override this."
+            },
+            "default": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Alias/fallback for value. Runtime JSON results may also return default."
+            },
+            "multi": {
+              "type": "boolean",
+              "default": false
+            },
+            "clearable": {
+              "type": "boolean",
+              "default": true
+            },
+            "placeholder": {
+              "$ref": "#/$defs/string_or_source"
+            }
+          }
+        }
+      },
+      "description": "A dropdown/input-select block. Options may be inline, resolved through ?source, or dynamically returned by JSON execution results."
+    },
+    "block_input_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "config"
+      ],
+      "properties": {
+        "type": {
+          "const": "input_range"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "input_id",
+            "label",
+            "min",
+            "max"
+          ],
+          "properties": {
+            "input_id": {
+              "$ref": "#/$defs/identifier",
+              "description": "Key stored in dashboard-input-store."
+            },
+            "label": {
+              "$ref": "#/$defs/string_or_source",
+              "description": "Range label or ?source value resolving to a string."
+            },
+            "min": {
+              "$ref": "#/$defs/number_or_source"
+            },
+            "max": {
+              "$ref": "#/$defs/number_or_source"
+            },
+            "step": {
+              "$ref": "#/$defs/number_or_source"
+            },
+            "default": {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/source_value"
+                }
+              ],
+              "description": "Current or initial selected range value. May be a single number for slider behavior, a two-number array for range-slider behavior, null, or a ?source-resolved value."
+            }
+          }
+        }
+      }
+    },
+    "block": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/block_plotly"
+        },
+        {
+          "$ref": "#/$defs/block_plotly_resampler"
+        },
+        {
+          "$ref": "#/$defs/block_table"
+        },
+        {
+          "$ref": "#/$defs/block_markdown"
+        },
+        {
+          "$ref": "#/$defs/block_image"
+        },
+        {
+          "$ref": "#/$defs/block_raw_html"
+        },
+        {
+          "$ref": "#/$defs/block_input_select"
+        },
+        {
+          "$ref": "#/$defs/block_input_range"
+        }
+      ]
+    },
+    "tile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "position",
+        "block"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Unique tile identifier."
+        },
+        "title": {
+          "$ref": "#/$defs/string_or_source",
+          "description": "Optional tile title shown in the card header. May be inline text or resolved through ?source."
+        },
+        "position": {
+          "$ref": "#/$defs/layout_position"
+        },
+        "depends_on": {
+          "$ref": "#/$defs/tile_dependency_list",
+          "description": "Tile ids that must be evaluated before this tile. Applies to all tile types, including input tiles."
+        },
+        "triggered_by": {
+          "$ref": "#/$defs/tile_dependency_list",
+          "description": "Tile ids whose user interaction or execution should trigger this tile. Applies to all tile types, including input tiles."
+        },
+        "card": {
+          "$ref": "#/$defs/card",
+          "description": "Presentation settings for the dbc.Card wrapper."
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact",
+          "description": "Optional per-tile artifact download control."
+        },
+        "controls": {
+          "$ref": "#/$defs/tile_controls",
+          "description": "Optional per-tile UI controls (e.g. a run button)."
+        },
+        "load": {
+          "$ref": "#/$defs/load"
+        },
+        "exec": {
+          "$ref": "#/$defs/exec"
+        },
+        "query": {
+          "$ref": "#/$defs/query"
+        },
+        "block": {
+          "$ref": "#/$defs/block"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional tags for search/filtering."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "exec": {
+                "properties": {
+                  "type": {
+                    "const": "athena"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "required": [
+              "exec"
+            ]
+          },
+          "then": {
+            "required": [
+              "query"
+            ]
+          }
+        }
+      ],
+      "description": "A dashboard card tile with governed execution, source-value resolution, dependency hints, trigger routing, and registry-based rendering."
+    },
+    "text_or_lines_or_source": {
+      "description": "A string, an array of strings (joined with newlines — convenient for multiline SQL, markdown, or HTML), or a ?source value.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/$defs/source_value"
+        }
+      ]
+    }
+  }
+}

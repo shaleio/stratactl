@@ -3,6 +3,27 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.0.2] — 2026-07-29
+
+### Added
+- **`stratactl dashboards`** made usable end-to-end: a generic, bucket-only `push`
+  (validate against the packaged dashboard schema → flat-upload to
+  `analyst/dashboards/<name>.json`), plus the git-sync flow (`--new`/`list`/`pull`/
+  `diff`) for version-controlled dashboards. The git-registry table is only required
+  for the git-sync actions, so the plain funnel works without it.
+- Bundled `dashboard.schema.json` as package data and enabled schema validation on
+  push (auto-detects the 2020-12 draft). Added `jsonschema` dependency.
+
+### Fixed
+- **Zero-config dashboards**: resolve the system bucket + git-registry table from the
+  recorded `dev install` tofu outputs, so `dashboards` needs no manual `[dashboards]`
+  config or `.env`.
+- `dashboards push`: no longer crashes writing a manifest into a non-existent local
+  dir — the manifest is only persisted for a real git working dir or a git-flow op.
+- **`dev configure-local`**: unwrap `tofu output -json` `{value,…}` wrappers (the
+  generated `.env` was a stringified dict), and write `AWS_DEFAULT_REGION` as well as
+  `AWS_REGION` so older botocore resolves a client region (fixes app `NoRegionError`).
+
 ## [1.0.1] — 2026-07-26
 
 ### Fixed
