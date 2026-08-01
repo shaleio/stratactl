@@ -10,7 +10,13 @@ working directory before running tofu — the packaged copy is never mutated.
 from __future__ import annotations
 
 from importlib import resources
-from importlib.abc import Traversable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Type-only import: importlib.abc.Traversable was removed in Python 3.13 (its
+    # canonical home is importlib.resources.abc). `from __future__ import annotations`
+    # makes the return annotation below a string, so it's never needed at runtime.
+    from importlib.resources.abc import Traversable  # noqa: F401
 
 __all__ = ["bootstrap_infra_root", "bootstrap_infra_files"]
 

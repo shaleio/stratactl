@@ -3,6 +3,14 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.0.3] — 2026-08-01
+
+### Fixed
+- **Python 3.13 compatibility**: `strata.bootstrap` no longer imports
+  `importlib.abc.Traversable` at runtime (removed in 3.13). It's now a type-only
+  import, so `bootstrap` and every command import cleanly on 3.13. (`requires-python`
+  is `>=3.11`, so 3.13 must work.)
+
 ## [1.0.2] — 2026-07-29
 
 ### Added
