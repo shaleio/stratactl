@@ -145,8 +145,10 @@ def add_parser(sub: "argparse._SubParsersAction") -> None:
     demo_sub = demo.add_subparsers(dest="demo_action", required=True)
     for _act in ("install", "remove", "status"):
         _dp = demo_sub.add_parser(_act)
-        _dp.add_argument("--profile", default=None)
-        _dp.add_argument("--region", default=None)
+        # SUPPRESS so an omitted local flag doesn't clobber a hoisted global
+        # --profile/--region (see cli._hoist_global_flags).
+        _dp.add_argument("--profile", default=argparse.SUPPRESS)
+        _dp.add_argument("--region", default=argparse.SUPPRESS)
         _dp.add_argument("--yes", action="store_true")
 
     di = dsub.add_parser("install", help="Deploy the Dev data plane (HQ-free).")

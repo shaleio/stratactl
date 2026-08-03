@@ -127,8 +127,34 @@ def _overrides(args: argparse.Namespace) -> dict[str, Any]:
     return o
 
 
+_HOISTABLE = {"--profile", "--region"}
+
+
+def _hoist_global_flags(argv: list[str]) -> list[str]:
+    """Let global flags appear after the subcommand too: normalize
+    `stratactl bootstrap --profile X --region Y` into
+    `stratactl --profile X --region Y bootstrap`. Only the unambiguous global-only
+    flags (--profile/--region) are moved; everything else keeps its position. This
+    removes the #1 first-run footgun (the one AI-written commands hit as well)."""
+    front: list[str] = []
+    rest: list[str] = []
+    i, n = 0, len(argv)
+    while i < n:
+        tok = argv[i]
+        if tok.split("=", 1)[0] in _HOISTABLE:
+            front.append(tok)
+            if "=" not in tok and i + 1 < n and not argv[i + 1].startswith("-"):
+                front.append(argv[i + 1]); i += 2
+            else:
+                i += 1
+        else:
+            rest.append(tok); i += 1
+    return front + rest
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    args = _build_parser().parse_args(_hoist_global_flags(argv))
     try:
         settings = load_settings(_overrides(args))
         # Import lazily so a bad command doesn't pull in boto3-heavy paths.

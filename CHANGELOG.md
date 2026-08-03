@@ -3,10 +3,25 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.0.4] — 2026-08-01
+
+### Added
+- **`bootstrap --destroy`**: full StrataCI teardown — pulls the durable state from S3
+  and `tofu destroy`s **locally** (a teardown-only override disables `prevent_destroy`
+  and force-empties the bucket so it completes). With `dev uninstall`, this is the
+  complete "remove everything." Guarded by an account-id confirmation.
+- **Durable bootstrap state**: after `bootstrap` applies, the local StrataCI tofu
+  state is copied to `s3://<strataci-bucket>/bootstrap/terraform.tfstate` so teardown
+  isn't tied to the machine that ran the install (groundwork for `bootstrap destroy`).
+- **Forgiving argument order**: `--profile`/`--region` now work *after* the
+  subcommand too (`stratactl bootstrap --profile X --region Y`), not just before.
+  This was the "bootstrap command was wrong in docs" footgun and the one AI-written
+  commands hit. argv is normalized before parsing.
+
 ## [1.0.3] — 2026-08-01
 
 ### Fixed
-- **Python 3.13 compatibility**: `strata.bootstrap` no longer imports
+- **Python 3.13 / 3.14 compatibility**: `strata.bootstrap` no longer imports
   `importlib.abc.Traversable` at runtime (removed in 3.13). It's now a type-only
   import, so `bootstrap` and every command import cleanly on 3.13. (`requires-python`
   is `>=3.11`, so 3.13 must work.)
