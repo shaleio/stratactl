@@ -142,7 +142,11 @@ def main() -> int:
             raise RuntimeError("signature required but missing signature/public key "
                                "(STRATA_ARTIFACT_SIGNATURE / STRATA_HQ_PUBKEY)")
         else:
-            print("runner: no signature verification (unsigned or keys not configured)", flush=True)
+            print("runner: WARNING - bundle signature NOT verified (no signature/public "
+                  "key configured). The SHA-256 is checked, but integrity is not "
+                  "cryptographically guaranteed. Set STRATA_REQUIRE_SIGNATURE=1 and "
+                  "configure STRATA_HQ_PUBKEY + signed bundles to enforce signing.",
+                  flush=True)
 
         workdir = bundle.safe_extract(zip_path, workroot / "bundle")
 
@@ -163,8 +167,33 @@ def main() -> int:
         cust_key = f"config/{module_id}.auto.tfvars.json"
         try:
             obj = s3.get_object(Bucket=state_bucket, Key=cust_key)
-            (tofu_dir / "zz-customer.auto.tfvars.json").write_bytes(obj["Body"].read())
-            print(f"runner: applied customer tfvars {cust_key}", flush=True)
+            raw = obj["Body"].read()
+            # Filter to variables this module actually declares. The install schema is
+            # shared across editions, so a developer module receives enterprise-only keys
+            # (enable_rbac, enable_ai, vpc_id, …) it never declares, which tofu emits as
+            # "undeclared variable" warnings. Drop those here. Safety: if we can't find
+            # any `variable` declarations (unexpected), write the file unfiltered rather
+            # than risk dropping legitimate overrides.
+            import re as _re
+            declared: set[str] = set()
+            for tf in tofu_dir.glob("*.tf"):
+                declared |= set(_re.findall(r'(?m)^\s*variable\s+"([^"]+)"', tf.read_text(encoding="utf-8", errors="replace")))
+            try:
+                cust = json.loads(raw)
+            except Exception:
+                cust = None
+            if declared and isinstance(cust, dict):
+                dropped = sorted(k for k in cust if k not in declared)
+                kept = {k: v for k, v in cust.items() if k in declared}
+                (tofu_dir / "zz-customer.auto.tfvars.json").write_text(
+                    json.dumps(kept, indent=2), encoding="utf-8")
+                msg = f"runner: applied customer tfvars {cust_key} ({len(kept)} of {len(cust)} keys)"
+                if dropped:
+                    msg += f"; ignored keys not declared by this module: {', '.join(dropped)}"
+                print(msg, flush=True)
+            else:
+                (tofu_dir / "zz-customer.auto.tfvars.json").write_bytes(raw)
+                print(f"runner: applied customer tfvars {cust_key} (unfiltered)", flush=True)
         except Exception:  # noqa: BLE001 — missing key is normal for var-less modules
             print(f"runner: no customer tfvars at {cust_key} (bundle defaults only)", flush=True)
 

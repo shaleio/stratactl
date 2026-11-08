@@ -3,6 +3,27 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.7.0] — 2026-11-07
+
+Fixes from the StrataBI Developer Edition new-user install test.
+
+### Fixed
+- **Runner pins the `strata` package to the launching CLI's version** by default
+  (`STRATA_PKG=stratactl==<local version>`) instead of installing the latest from PyPI,
+  so the CodeBuild runner can't silently drift from the operator's CLI. Override still
+  available via `STRATA_RUNNER_PKG`.
+- **Customer tfvars are filtered to the variables each module declares** before being
+  written next to a module's OpenTofu. The shared install schema emitted enterprise-only
+  keys (`enable_rbac`, `enable_ai`, `vpc_id`, …) that a developer module doesn't declare,
+  producing "undeclared variable" warnings; those keys are now dropped (and logged).
+- **`dev configure-local` writes an ASCII-only `.env` header.** The em dash rendered as
+  mojibake (`â€”`) in Windows PowerShell 5.1.
+
+### Changed
+- The runner prints a prominent **warning** when a bundle's signature is not verified
+  (no signature/public key configured), and points at `STRATA_REQUIRE_SIGNATURE=1` to
+  enforce signing. The SHA-256 is still always checked.
+
 ## [1.0.4] — 2026-08-01
 
 ### Added

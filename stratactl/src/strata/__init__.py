@@ -5,4 +5,4 @@ One codebase, two entry points:
   * `strata.runner` — the program that runs inside the ephemeral CodeBuild runner
 """
 
-__version__ = "1.0.4"
+__version__ = "1.7.0"

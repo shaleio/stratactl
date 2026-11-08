@@ -156,10 +156,13 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
     # The runner must have the `strata` package to execute the job. On a standard
     # CodeBuild image it isn't present, so tell the buildspec how to install it
     # (imported as `strata`, distributed on PyPI as `stratactl`). Overridable to
-    # pin a version or point at an s3:// wheel via STRATA_RUNNER_PKG. Harmless on a
+    # point at an s3:// wheel or a different spec via STRATA_RUNNER_PKG. Harmless on a
     # prebaked image — the buildspec skips the install when `import strata` already
     # succeeds. Sent per-build so it always tracks the launching CLI, no re-bootstrap.
-    env["STRATA_PKG"] = os.getenv("STRATA_RUNNER_PKG", "stratactl")
+    # Default is PINNED to this CLI's version so the runner can't silently drift to a
+    # newer PyPI release than the operator is running locally.
+    from strata import __version__ as _strata_version
+    env["STRATA_PKG"] = os.getenv("STRATA_RUNNER_PKG", f"stratactl=={_strata_version}")
 
     # Bundle-signing config (Decision C). Verification is offline in the runner.
     if settings.hq.public_key:

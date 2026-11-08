@@ -101,7 +101,9 @@ def run(settings, args) -> int:
             for k in _LOCAL_KEYS:
                 if k in outputs:
                     lines.append(f"{k}={_val(outputs[k])}")
-        body = "# StrataBI Dev — non-secret local config (written by `stratactl dev " \
+        # ASCII-only header: this file is sourced by shells and read in PowerShell 5.1,
+        # which renders a UTF-8 em dash as mojibake (e.g. "â€”"). Keep it to plain ASCII.
+        body = "# StrataBI Dev - non-secret local config (written by `stratactl dev " \
                "configure-local`).\n# AWS credentials are NOT written here; use your " \
                "profile / provider chain.\n" + "\n".join(lines) + "\n"
         out = getattr(args, "out", None) or ".env"
