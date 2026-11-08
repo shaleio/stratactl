@@ -7,7 +7,9 @@ build-backend = "setuptools.build_meta"
 name = "stratactl"
 # Versioning is Major.Sprint.Patch (Shaleio ecosystem sprint clock), not SemVer.
 # Sprint 0 begins 2026-07-27. See "Versioning" in the README.
-version = "1.0.4"
+# Read dynamically from src/strata/__init__.py so there's a single source of truth
+# (a hardcoded value here previously shipped the wrong version even after the bump).
+dynamic = ["version"]
 description = "StrataCTL — bootstrap StrataCI into a customer AWS account and install/update/uninstall StrataBI modules via an ephemeral CodeBuild runner."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -53,6 +55,9 @@ Issues = "https://github.com/shaleio/stratactl/issues"
 
 [project.scripts]
 stratactl = "strata.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "strata.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
