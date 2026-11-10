@@ -3,6 +3,33 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.7.1] — 2026-11-09
+
+Enterprise install fixes from the first customer-style install (E-series).
+
+### Fixed
+- **Version is read dynamically** from `strata.__version__` (pyproject was hardcoded, so
+  builds shipped the wrong version even after a bump).
+- **Runner CodeBuild is now `privileged_mode = true`** so the platform install can build
+  the StrataBI image in-account and push it to the customer ECR (E12).
+- **Post-install health gate (E13):** after apply, the runner waits for the ECS service to
+  reach steady state and prints the URL; if it can't start it fails with the stopped-task
+  reason instead of reporting SUCCEEDED over a dead service.
+- **`init` no longer requires a container image URL (E2):** `stratabi_image` is now an
+  optional override; by default the platform module builds and pushes the image for you.
+
+### Added (install UX)
+- **`init` network preflight (E1):** discovers the account's VPC + subnets, pre-fills them,
+  and offers to create a default VPC if there's none (ALB needs >=2 AZs).
+- **Inbound defaults to the caller's /32 (E4)** instead of `0.0.0.0/0`.
+- **Ctrl-C during the wizard saves your answers (E3)** so a re-run resumes.
+- **A failed install prints next steps (E11):** safe re-run, `stratactl logs <job_id>`,
+  and the common causes.
+
+### Note
+- The runner `privileged_mode` change is in `strataci-runner/infra`; re-run
+  `stratactl bootstrap` in the customer account to apply it.
+
 ## [1.7.0] — 2026-11-07
 
 Fixes from the StrataBI Developer Edition new-user install test.

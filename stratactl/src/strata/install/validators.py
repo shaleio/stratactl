@@ -56,7 +56,9 @@ def name_prefix(value: str) -> None:
 
 
 def ecr_image(value: str) -> None:
-    v = str(value)
+    v = str(value).strip()
+    if not v:
+        return  # optional override; empty means "build in-account" (E2)
     if "/" not in v or ":" not in v.rsplit("/", 1)[-1]:
         raise ValueError(
             "expected an image ref like "

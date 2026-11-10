@@ -182,4 +182,15 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
     print("--- streaming runner logs ---")
     status = stream_build(sess, handle["build_id"])
     print(f"--- runner finished: {status} ---")
+    if status != "SUCCEEDED":
+        # E11: tell the operator what to do next instead of leaving them at a bare FAILED.
+        print(
+            "\nNext steps:\n"
+            f"  - Re-running is safe — state lives in your S3 backend, so a re-run only\n"
+            f"    creates what's missing:  stratactl {action}-stratabi\n"
+            f"  - Inspect the full log:    stratactl logs {job.job_id}\n"
+            "  - Common causes: an AlreadyExists_ name collision (pick a different install\n"
+            "    name), no VPC / <2 AZ subnets, expired SSO (`aws sso login`), or Bedrock\n"
+            "    model access not enabled when enable_ai=true."
+        )
     return 0 if status == "SUCCEEDED" else 1

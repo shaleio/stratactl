@@ -84,10 +84,13 @@ STRATABI_SCHEMA = InstallSchema(
               tfvar="domain_name", default="", validator="domain",
               help="DNS is managed outside this module; leave blank if none"),
 
-        # runtime image
-        Field("runtime", "stratabi_image", "StrataBI container image (ECR URL)",
-              tfvar="stratabi_image", required=True, validator="ecr_image",
-              help="e.g. <acct>.dkr.ecr.us-east-1.amazonaws.com/stratabi:latest"),
+        # runtime image — OPTIONAL override only (E2). By default the platform module
+        # builds the entitled runtime in-account and pushes it to the ECR repo it creates,
+        # so the customer does NOT supply an image. Set this only to run your own registry.
+        Field("runtime", "stratabi_image", "StrataBI container image (ECR URL) — optional override; leave blank to build in-account",
+              tfvar="stratabi_image", required=False, default="", validator="ecr_image",
+              help="Leave blank: the install builds + pushes the image for you. "
+                   "Override example: <acct>.dkr.ecr.us-east-1.amazonaws.com/my-stratabi:1.7.1"),
 
         # network
         Field("network", "vpc_id", "VPC id",

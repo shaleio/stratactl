@@ -49,6 +49,81 @@ def _interactive(args) -> bool:
     return not getattr(args, "non_interactive", False)
 
 
+def _public_ip() -> str | None:
+    """Best-effort: the caller's public IP, for a sensible default inbound rule (E4)."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen("https://checkip.amazonaws.com", timeout=5) as r:
+            ip = r.read().decode().strip()
+        return ip or None
+    except Exception:
+        return None
+
+
+def _confirm(msg: str) -> bool:
+    try:
+        return input(f"{msg} [y/N] ").strip().lower() in ("y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
+def _preflight_network(settings, config) -> None:
+    """Discover VPCs/subnets + the caller's public IP and pre-seed the network defaults so
+    the wizard offers real choices, and offer to create a default VPC if the account has
+    none (E1/E4). Best-effort — never blocks init on a discovery failure."""
+    from strata.install import store
+    try:
+        from strata.aws import session as aws_session
+        ec2 = aws_session.make_session(settings).client("ec2")
+    except Exception as exc:  # noqa: BLE001
+        print(f"  (skipping network discovery: {exc})")
+        return
+
+    print("Network preflight…")
+
+    # E4: default inbound to the caller's /32 instead of the world.
+    if store.get(config, "network", "allowed_ip_cidrs", None) in (None, [], ""):
+        ip = _public_ip()
+        if ip:
+            store.set_(config, "network", "allowed_ip_cidrs", [f"{ip}/32"])
+            print(f"  inbound default set to your IP {ip}/32 (widen it in the wizard if needed)")
+
+    # E1: VPC + subnet discovery.
+    try:
+        vpcs = ec2.describe_vpcs().get("Vpcs", [])
+    except Exception as exc:  # noqa: BLE001
+        print(f"  (could not list VPCs: {exc})")
+        return
+    if not vpcs:
+        print("  No VPC in this account/region — StrataBI needs a VPC with >=2 public subnets in different AZs.")
+        if _confirm("  Create a default VPC now?"):
+            try:
+                ec2.create_default_vpc()
+                vpcs = ec2.describe_vpcs().get("Vpcs", [])
+                print("  created a default VPC.")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  create-default-vpc failed: {exc}. Create one manually, then re-run init.")
+                return
+        else:
+            return
+
+    vpc = next((v for v in vpcs if v.get("IsDefault")), vpcs[0])
+    vpc_id = vpc["VpcId"]
+    subs = ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]).get("Subnets", [])
+    public = [s["SubnetId"] for s in subs if s.get("MapPublicIpOnLaunch")]
+    azs = {s["AvailabilityZone"] for s in subs}
+    label = "default" if vpc.get("IsDefault") else "first"
+    print(f"  VPC {vpc_id} ({label}) — {len(subs)} subnet(s) across {len(azs)} AZ(s)")
+
+    if store.get(config, "network", "vpc_id", None) is None:
+        store.set_(config, "network", "vpc_id", vpc_id)
+    if store.get(config, "network", "public_subnet_ids", None) in (None, [], "") and len(public) >= 2:
+        store.set_(config, "network", "public_subnet_ids", public[:2])
+        print(f"  pre-filled public subnets (ALB): {', '.join(public[:2])}")
+    elif len(public) < 2:
+        print("  ! fewer than 2 public subnets — the ALB needs >=2 in different AZs; add subnets or pick another VPC.")
+
+
 def run(settings, args) -> int:
     if getattr(args, "show_config", False):
         return _legacy_show(settings)
@@ -77,10 +152,22 @@ def _run_stratabi(settings, args) -> int:
     if _interactive(args):
         print(f"StrataBI installation wizard  ({'updating' if existed else 'new'}: {path.name})")
         print("Answer the prompts; press Enter to accept the [default]. Ctrl-C to abort.")
+        # Enterprise deploys an ALB/Fargate stack into a VPC — discover networking and
+        # a sensible inbound default before prompting (E1/E4). Dev edition needs none.
+        edition = store.get(config, "installation", "edition", "enterprise")
+        if edition == "enterprise":
+            _preflight_network(settings, config)
 
     wizard = Wizard(schema, config, interactive=_interactive(args),
                     update=getattr(args, "update", False))
-    config = wizard.run()
+    # E3: the wizard mutates `config` in place as each field is answered, so on abort we
+    # still have everything answered so far — persist it so re-running resumes.
+    try:
+        config = wizard.run()
+    except KeyboardInterrupt:
+        store.save(path, config)
+        print(f"\nAborted — answers so far saved to {path}. Re-run `stratactl init` to continue.")
+        return 130
 
     store.save(path, config)
     out = _out_dir(args)

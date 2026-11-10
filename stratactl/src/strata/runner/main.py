@@ -82,6 +82,60 @@ def _scoped_deploy_env(session, m, region: str, state_bucket: str, lock_table: s
     return env
 
 
+def _output(outputs: dict, key: str):
+    """Unwrap a `tofu output -json` entry ({"value": ...}) to its scalar, or None."""
+    v = (outputs or {}).get(key)
+    if isinstance(v, dict):
+        v = v.get("value")
+    return v if isinstance(v, str) and v else None
+
+
+def _latest_stopped_reason(ecs, cluster: str, service: str):
+    try:
+        ids = ecs.list_tasks(cluster=cluster, serviceName=service,
+                             desiredStatus="STOPPED").get("taskArns", [])
+        if not ids:
+            return None
+        tasks = ecs.describe_tasks(cluster=cluster, tasks=ids[:1]).get("tasks", [])
+        if not tasks:
+            return None
+        t = tasks[0]
+        parts = [t.get("stoppedReason")]
+        for c in t.get("containers", []):
+            if c.get("reason"):
+                parts.append(f"{c.get('name')}: {c['reason']}")
+        return "; ".join(p for p in parts if p) or None
+    except Exception:
+        return None
+
+
+def _wait_for_service(session, outputs: dict) -> None:
+    """Post-install health gate (E13). When the module exposes an ECS service, wait for it
+    to reach steady state and print the URL; if it can't start, raise with the stopped-task
+    reason so the job fails instead of reporting success over a dead service. No-op for
+    modules without an ECS service."""
+    cluster = _output(outputs, "ecs_cluster")
+    service = _output(outputs, "ecs_service")
+    if not (cluster and service):
+        return
+    url = _output(outputs, "service_url") or ""
+    ecs = session.client("ecs")
+    print(f"runner: waiting for ECS service {service} to stabilize…", flush=True)
+    try:
+        ecs.get_waiter("services_stable").wait(
+            cluster=cluster, services=[service],
+            WaiterConfig={"Delay": 15, "MaxAttempts": 40},  # ~10 minutes
+        )
+    except Exception as exc:  # noqa: BLE001 — WaiterError or a client error
+        reason = _latest_stopped_reason(ecs, cluster, service)
+        raise RuntimeError(
+            f"ECS service {service} did not reach steady state ({type(exc).__name__}). "
+            f"Latest stopped-task reason: {reason or 'unknown'}"
+        )
+    print(f"runner: StrataBI is live at {url}" if url else "runner: ECS service is stable.",
+          flush=True)
+
+
 def main() -> int:
     action = _env("STRATA_ACTION", required=True)
     module_id = _env("STRATA_MODULE", required=True)
@@ -248,6 +302,12 @@ def main() -> int:
                             state_key=state_key, outputs=outputs, job_id=job_id,
                             delivery=m.delivery, bundle_uri=bundle_uri,
                             sha256=actual, signature=signature)
+
+            # Post-apply health gate (E13): "apply SUCCEEDED" is not "the app is running".
+            # When the module exposes an ECS service, wait for it to stabilize and surface
+            # the URL; if it can't start (e.g. a bad/missing image), fail the job with the
+            # stopped-task reason instead of reporting success over a dead service.
+            _wait_for_service(session, outputs)
 
         elif action in ("uninstall", "destroy"):
             if not m.supports_destroy:
