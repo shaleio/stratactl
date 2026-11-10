@@ -89,6 +89,21 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--version", default="latest")
     sp.add_argument("--dir", help="Output dir (docker build context); default from config.")
 
+    # BYO CI/CD: resolve entitlement metadata / fetch the verified bundle WITHOUT CodeBuild.
+    ent = sub.add_parser("entitlement", help="Resolve licensed artifact metadata (no CodeBuild / StrataCI).")
+    esub = ent.add_subparsers(dest="ent_action", required=True)
+    er = esub.add_parser("resolve", help="Resolve entitlement metadata to a JSON file (for your own pipeline).")
+    er.add_argument("--module", default="stratabi", help="Module id (default: stratabi).")
+    er.add_argument("--version", default="latest", help="Version (default: latest).")
+    er.add_argument("--output", required=True,
+                    help="File to write the metadata JSON. Contains a short-lived presigned URL; written 0600.")
+
+    fb = sub.add_parser("fetch-bundle", help="Download + verify the licensed platform bundle (no CodeBuild / StrataCI).")
+    fb.add_argument("--module", default="stratabi", help="Module id (default: stratabi).")
+    fb.add_argument("--version", default="latest", help="Version (default: latest).")
+    fb.add_argument("--output", required=True, help="Path to write the verified module.zip.")
+    fb.add_argument("--metadata", help="Optional path to write a verification receipt (no presigned URL).")
+
     # dashboards: git <-> S3 sync for git-registered StrataBI dashboards
     dboards = sub.add_parser("dashboards", help="Sync git-registered dashboards with S3.")
     dsub = dboards.add_subparsers(dest="dash_action", required=True)
@@ -173,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
             "init": lambda: commands.init.run(settings, args),
             "dashboards": lambda: commands.dashboards.run(settings, args),
             "fetch-runtime": lambda: commands.fetch_runtime.run(settings, args),
+            "entitlement": lambda: commands.entitlement.run(settings, args),
+            "fetch-bundle": lambda: commands.fetch_bundle.run(settings, args),
         }
         rc = int(dispatch[args.command]() or 0)
         if rc == 0:

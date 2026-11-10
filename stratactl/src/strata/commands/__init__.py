@@ -1,9 +1,9 @@
 from strata.commands import (
-    bootstrap, dashboards, dev, fetch_runtime, init, install, list, logs,
-    platform, uninstall, update,
+    bootstrap, dashboards, dev, entitlement, fetch_bundle, fetch_runtime, init,
+    install, list, logs, platform, uninstall, update,
 )
 
 __all__ = [
     "install", "update", "uninstall", "list", "logs", "init", "platform",
-    "dashboards", "fetch_runtime", "bootstrap", "dev",
+    "dashboards", "fetch_runtime", "fetch_bundle", "entitlement", "bootstrap", "dev",
 ]
