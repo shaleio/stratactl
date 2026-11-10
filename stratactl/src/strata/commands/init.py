@@ -67,6 +67,40 @@ def _confirm(msg: str) -> bool:
         return False
 
 
+def _pick_subnets(subs: list) -> list:
+    """Interactive subnet chooser: a numbered list with 2 public subnets in distinct AZs
+    pre-suggested; accept Enter (use the suggestion), comma-separated numbers (click), or
+    paste your own subnet-ids."""
+    rows = sorted(subs, key=lambda s: (not s.get("MapPublicIpOnLaunch"), s.get("AvailabilityZone", "")))
+    ids = [s["SubnetId"] for s in rows]
+    suggestion, seen = [], set()
+    for s in rows:
+        if s.get("MapPublicIpOnLaunch") and s["AvailabilityZone"] not in seen:
+            suggestion.append(s["SubnetId"])
+            seen.add(s["AvailabilityZone"])
+        if len(suggestion) == 2:
+            break
+    print("  Subnets in this VPC (* = suggested for the ALB):")
+    for i, s in enumerate(rows, 1):
+        kind = "public" if s.get("MapPublicIpOnLaunch") else "private"
+        star = " *" if s["SubnetId"] in suggestion else ""
+        print(f"    {i}) {s['SubnetId']}  {s['AvailabilityZone']}  {kind}{star}")
+    default_nums = ",".join(str(ids.index(x) + 1) for x in suggestion) if suggestion else ""
+    try:
+        raw = input(f"  ALB subnets — numbers e.g. 1,2 (Enter = suggested), or paste subnet-ids [{default_nums}]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        raw = ""
+    if not raw:
+        return suggestion
+    if "subnet-" in raw:
+        return [t for t in raw.replace(",", " ").split() if t.startswith("subnet-")]
+    out = []
+    for tok in raw.replace(",", " ").split():
+        if tok.isdigit() and 1 <= int(tok) <= len(ids):
+            out.append(ids[int(tok) - 1])
+    return out or suggestion
+
+
 def _preflight_network(settings, config) -> None:
     """Discover VPCs/subnets + the caller's public IP and pre-seed the network defaults so
     the wizard offers real choices, and offer to create a default VPC if the account has
@@ -117,11 +151,15 @@ def _preflight_network(settings, config) -> None:
 
     if store.get(config, "network", "vpc_id", None) is None:
         store.set_(config, "network", "vpc_id", vpc_id)
-    if store.get(config, "network", "public_subnet_ids", None) in (None, [], "") and len(public) >= 2:
-        store.set_(config, "network", "public_subnet_ids", public[:2])
-        print(f"  pre-filled public subnets (ALB): {', '.join(public[:2])}")
-    elif len(public) < 2:
-        print("  ! fewer than 2 public subnets — the ALB needs >=2 in different AZs; add subnets or pick another VPC.")
+
+    # Subnet picker: pick by number (click) or paste your own ids (E1 UX).
+    if store.get(config, "network", "public_subnet_ids", None) in (None, [], ""):
+        chosen = _pick_subnets(subs)
+        if len(chosen) >= 2:
+            store.set_(config, "network", "public_subnet_ids", chosen)
+            print(f"  ALB subnets: {', '.join(chosen)}")
+        else:
+            print("  ! need >=2 subnets in different AZs for the ALB — the wizard will ask.")
 
 
 def run(settings, args) -> int:

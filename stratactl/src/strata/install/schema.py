@@ -97,10 +97,14 @@ STRATABI_SCHEMA = InstallSchema(
               tfvar="vpc_id", required=True, validator="vpc_id"),
         Field("network", "public_subnet_ids", "Public subnet ids (for the ALB)",
               tfvar="public_subnet_ids", type="list", required=True, validator="subnet_id"),
-        Field("network", "private_subnet_ids", "Private subnet ids (for ECS tasks)",
-              tfvar="private_subnet_ids", type="list", required=True, validator="subnet_id"),
+        # Ask whether to use private subnets BEFORE prompting for them, and only prompt
+        # for the ids when the answer is yes (otherwise it demanded private subnet ids the
+        # user explicitly didn't want, and looped on "a value is required").
         Field("network", "enable_private_subnets", "Place ECS tasks in private subnets?",
               tfvar="enable_private_subnets", type="bool", default=False),
+        Field("network", "private_subnet_ids", "Private subnet ids (for ECS tasks)",
+              tfvar="private_subnet_ids", type="list", required=False, default=[],
+              validator="subnet_id", when=("enable_private_subnets", True)),
         Field("network", "allowed_ip_cidrs", "Allowed inbound CIDRs (empty = open 0.0.0.0/0)",
               tfvar="allowed_ip_cidrs", type="list", default=[], validator="cidr",
               help="lock this down for anything beyond a private demo"),
