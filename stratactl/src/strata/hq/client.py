@@ -78,12 +78,17 @@ def _send(session, url: str, payload: bytes, hq: HQConfig,
 
 def check_entitlement(hq: HQConfig, customer_id: str, module_id: str,
                       version: str, *, session=None, region: Optional[str] = None,
-                      timeout: int = 15, action: Optional[str] = None) -> EntitlementResult:
+                      timeout: int = 15, action: Optional[str] = None,
+                      order_acceptance: Optional[dict] = None) -> EntitlementResult:
     """POST /entitlement to StrataHQ. Raises EntitlementDenied on a hard 'no'.
 
     action="destroy" asks HQ for the retained artifact so a teardown can proceed
     even if the grant has lapsed or the version is retired (destroy is always
-    permitted). Omit for install/update, which require an active grant."""
+    permitted). Omit for install/update, which require an active grant.
+
+    order_acceptance, when given (module install/update), carries the operator's
+    acceptance of the Official Module Order Form (terms version + content hash +
+    timestamp). HQ stores it alongside the account-stamped order-form record."""
     if not hq.endpoint:
         raise ConfigError("StrataHQ endpoint is not configured.")
     if not hq.token:
@@ -100,6 +105,8 @@ def check_entitlement(hq: HQConfig, customer_id: str, module_id: str,
     }
     if action:
         body["action"] = action
+    if order_acceptance:
+        body["order_acceptance"] = order_acceptance
     payload = json.dumps(body).encode("utf-8")
 
     status, raw = _send(session, url, payload, hq, region, timeout)

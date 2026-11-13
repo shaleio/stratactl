@@ -8,4 +8,5 @@ def run(settings, args) -> int:
         module_spec=args.module,
         version=getattr(args, "version", "latest"),
         cli_source=getattr(args, "source", None) or settings.source,
+        assume_yes=getattr(args, "yes", False),
     )

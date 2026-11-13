@@ -70,6 +70,7 @@ strata = [
     "config/*.toml",
     "bootstrap/**/*",
     "install/**/*.json",
+    "legal/*.md",
     "**/*.tf",
     "**/*.tftpl",
     "**/*.json",

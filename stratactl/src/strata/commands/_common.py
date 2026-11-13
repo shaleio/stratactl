@@ -60,7 +60,8 @@ def _upload_tfvars(sess, bucket: str, module_id: str, data: dict) -> Optional[st
 
 
 def launch(settings: Settings, *, action: str, module_spec: str, version: str,
-           cli_source: Optional[str] = None, module_id_override: Optional[str] = None) -> int:
+           cli_source: Optional[str] = None, module_id_override: Optional[str] = None,
+           assume_yes: bool = False) -> int:
     sess = aws_session.make_session(settings)
     account = aws_session.account_id(sess)
     bucket = settings.resolved_bucket(account)
@@ -101,9 +102,22 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
             if rec.get("signature"):
                 artifact_env["STRATA_ARTIFACT_SIGNATURE"] = rec["signature"]
     elif src.kind == KIND_STRATAHQ:
+        # Official Modules carry a per-account perpetual license recorded via an Order
+        # Form at extraction; the platform products carry the master Enterprise license
+        # instead and are exempt. Show the terms + capture acceptance, then hand the
+        # acceptance metadata to HQ, which writes the authoritative, account-stamped
+        # record. Declining raises and aborts before anything is extracted.
+        from strata.legal import order_form as _of
+        order_acceptance = None
+        if action in ("install", "update") and module_id not in _of.PLATFORM_IDS:
+            order_acceptance = _of.prompt_acceptance(
+                module_id=module_id, version=version, account_id=account,
+                assume_yes=assume_yes,
+            )
         ent = hq.check_entitlement(settings.hq, customer_id=account,
                                    module_id=module_id, version=version,
-                                   session=sess, region=settings.hq.region or settings.region)
+                                   session=sess, region=settings.hq.region or settings.region,
+                                   action=action, order_acceptance=order_acceptance)
         artifact_env = {"STRATA_ARTIFACT_URL": ent.artifact_url or ""}
         if ent.sha256:
             artifact_env["STRATA_ARTIFACT_SHA256"] = ent.sha256
