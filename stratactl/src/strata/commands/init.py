@@ -115,12 +115,15 @@ def _preflight_network(settings, config) -> None:
 
     print("Network preflight…")
 
-    # E4: default inbound to the caller's /32 instead of the world.
-    if store.get(config, "network", "allowed_ip_cidrs", None) in (None, [], ""):
-        ip = _public_ip()
-        if ip:
-            store.set_(config, "network", "allowed_ip_cidrs", [f"{ip}/32"])
-            print(f"  inbound default set to your IP {ip}/32 (widen it in the wizard if needed)")
+    # E4/E5: use the caller's public IP for sensible inbound + bootstrap-admin defaults.
+    ip = _public_ip()
+    if ip and store.get(config, "network", "allowed_ip_cidrs", None) in (None, [], ""):
+        store.set_(config, "network", "allowed_ip_cidrs", [f"{ip}/32"])
+        print(f"  inbound default set to your IP {ip}/32 (widen it in the wizard if needed)")
+    # E5: pre-seed a bootstrap admin so enabling RBAC can't silently lock the installer out.
+    if ip and not store.get(config, "features", "rbac_bootstrap_admin", ""):
+        store.set_(config, "features", "rbac_bootstrap_admin", ip.replace(".", "_"))
+        print(f"  bootstrap-admin default set to your IP id {ip.replace('.', '_')} (used only with RBAC on; change in the wizard)")
 
     # E1: VPC + subnet discovery.
     try:
