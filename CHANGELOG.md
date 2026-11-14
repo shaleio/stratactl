@@ -3,6 +3,26 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.7.6] — 2026-11-14
+
+Platform image-roll + deploy-role fixes surfaced during the sandbox 1.7.5 refresh.
+
+### Fixed
+- **Runner threads the resolved version into tofu** (`runner/main.py`): sets
+  `TF_VAR_runtime_version` from the entitled version so the platform image tag becomes
+  `repo:<version>` (not the constant `latest`). Previously the ECS task-definition image
+  string never changed on an update, so Fargate never rolled to the newly-built image and
+  `image_build` didn't even re-trigger. Now an update rebuilds + rolls on its own.
+- **StrataCI deploy role widened** (`bootstrap/infra` + `strataci-runner/infra`): added
+  `scheduler:*`, `ses:*`, `sagemaker:*` to the broad base role so modules that create
+  EventBridge Scheduler / SES / SageMaker resources (StrataNotebook, StrataMail) can deploy.
+  The base role is the ceiling the session policy narrows, so these must be present in the base.
+
+> NOTE: the CodeBuild runner pip-installs `stratactl` from PyPI (pinned via `STRATA_PKG`),
+> so these fixes only take effect once 1.7.6 is published to PyPI and the operator upgrades
+> their local CLI (`pipx upgrade stratactl`) and re-runs `stratactl bootstrap` (to pick up the
+> deploy-role policy — or keep the one-off `strataci-extra-services` inline policy until then).
+
 ## [1.7.1] — 2026-11-09
 
 Enterprise install fixes from the first customer-style install (E-series).

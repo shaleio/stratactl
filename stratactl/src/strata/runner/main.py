@@ -278,6 +278,16 @@ def main() -> int:
             f"-backend-config=dynamodb_table={lock_table}",
             "-backend-config=encrypt=true",
         ]
+        # Thread the resolved version into the tofu as runtime_version. Without this it
+        # defaults to "latest", so the ECS task-definition image string never changes on an
+        # update and the Fargate service never rolls to the newly-built image. Setting it makes
+        # the image tag versioned (repo:<version>) → task-def diff → ECS rolls automatically.
+        if version and version != "latest":
+            if deploy_env is None:
+                os.environ["TF_VAR_runtime_version"] = version
+            else:
+                deploy_env["TF_VAR_runtime_version"] = version
+
         _tofu(["init", "-input=false", *backend], tofu_dir, env=deploy_env)
 
         if action in ("install", "update"):

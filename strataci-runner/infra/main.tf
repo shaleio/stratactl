@@ -209,9 +209,9 @@ resource "aws_iam_role_policy" "deploy" {
         # StrataBI platform's VPC/ECS/ALB/Cognito/security services.
         Action = [
           "s3:*", "dynamodb:*", "lambda:*", "iam:*", "logs:*",
-          "athena:*", "glue:*", "sqs:*", "events:*", "cloudwatch:*",
+          "athena:*", "glue:*", "sqs:*", "events:*", "scheduler:*", "cloudwatch:*",
           "ssm:*", "states:*", "apigateway:*", "ecr:*", "kms:*",
-          "ec2:*", "ecs:*", "elasticloadbalancing:*",
+          "ec2:*", "ecs:*", "elasticloadbalancing:*", "ses:*", "sagemaker:*",
           "cognito-idp:*", "cognito-identity:*", "application-autoscaling:*",
           "guardduty:*", "inspector2:*", "securityhub:*", "sts:*"
         ],
