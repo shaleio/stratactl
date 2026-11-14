@@ -237,7 +237,9 @@ resource "aws_codebuild_project" "runner" {
     type            = "LINUX_CONTAINER"
     image           = var.runner_image
     compute_type    = var.runner_compute_type
-    privileged_mode = false
+    # Required for the platform install to build the StrataBI image in-account and push it
+    # to the customer's ECR (E12). Docker-in-Docker needs a privileged CodeBuild container.
+    privileged_mode = true
 
     environment_variable {
       name  = "TOFU_VERSION"

@@ -3,6 +3,18 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.7.7] — 2026-11-14
+
+### Fixed
+- **`stratactl bootstrap` now creates a privileged runner.** The infra packaged in the CLI
+  (`strata/bootstrap/infra`) still had `privileged_mode = false`; the 1.7.1 fix only landed in
+  the repo copy (`strataci-runner/infra`), which `bootstrap` does not apply. Without it the
+  platform module's in-account image build (Docker in CodeBuild) cannot run, so
+  `install-stratabi` / `update stratabi` never produce a new image.
+
+> Existing accounts: `pipx upgrade stratactl` then re-run `stratactl bootstrap` to flip the
+> runner to privileged (an in-place CodeBuild project update; state and tables are kept).
+
 ## [1.7.6] — 2026-11-14
 
 Platform image-roll + deploy-role fixes surfaced during the sandbox 1.7.5 refresh.
