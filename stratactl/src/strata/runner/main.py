@@ -40,6 +40,62 @@ def _tofu(args: list[str], cwd: Path, env: dict | None = None) -> None:
         raise RuntimeError(f"tofu {args[0]} failed (exit {proc.returncode})")
 
 
+def _declared_vars(tofu_dir: Path) -> set[str]:
+    declared: set[str] = set()
+    for tf in tofu_dir.glob("*.tf"):
+        declared |= set(re.findall(r'(?m)^\s*variable\s+"([^"]+)"',
+                                   tf.read_text(encoding="utf-8", errors="replace")))
+    return declared
+
+
+def _apply_env_tfvars(s3, bucket: str, env_name: str, tofu_dir: Path) -> None:
+    """Write the environment's tfvars (config/env/<env>.auto.tfvars.json) as the last-loaded
+    tfvars file, filtered to the variables this module declares."""
+    from strata.install import envstore
+
+    try:
+        env_cfg = envstore.load(s3, bucket, env_name)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"could not read environment config {envstore.key(env_name)}: {exc}") from exc
+    if not env_cfg:
+        print(f"runner: no environment config at {envstore.key(env_name)}", flush=True)
+        return
+    declared = _declared_vars(tofu_dir)
+    kept = {k: v for k, v in env_cfg.items() if not declared or k in declared}
+    (tofu_dir / "zzz-env.auto.tfvars.json").write_text(json.dumps(kept, indent=2), encoding="utf-8")
+
+    cust_path = tofu_dir / "zz-customer.auto.tfvars.json"
+    overridden = []
+    if cust_path.is_file():
+        try:
+            cust = json.loads(cust_path.read_text(encoding="utf-8"))
+            overridden = sorted(k for k in kept if k in cust and cust[k] != kept[k])
+        except Exception:  # noqa: BLE001
+            pass
+    msg = f"runner: applied environment config {envstore.key(env_name)} ({', '.join(sorted(kept)) or 'no matching keys'})"
+    if overridden:
+        msg += f"; environment wins over module tfvars for: {', '.join(overridden)}"
+    print(msg, flush=True)
+
+
+def _guard_plan(tofu_dir: Path, env: dict | None) -> None:
+    """Refuse to apply a plan that destroys/replaces protected infrastructure unless the
+    operator passed --allow-replace (STRATA_ALLOW_REPLACE=1)."""
+    from strata.runner import planguard
+
+    out = subprocess.run(["tofu", "show", "-json", "plan.bin"], cwd=str(tofu_dir), env=env,
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        raise RuntimeError(f"plan guard: tofu show -json failed (exit {out.returncode})")
+    allow = os.environ.get("STRATA_ALLOW_REPLACE", "").lower() in ("1", "true", "yes", "on")
+    hits = planguard.check(json.loads(out.stdout), allow_replace=allow)
+    if hits:
+        print("runner: plan guard: --allow-replace given; proceeding with:\n"
+              + planguard.format_report(hits), flush=True)
+    else:
+        print("runner: plan guard: no protected resources destroyed or replaced", flush=True)
+
+
 def _scoped_deploy_env(session, m, region: str, state_bucket: str, lock_table: str) -> dict | None:
     """Decision A: assume the deploy role with a session policy derived from the
     module manifest, so tofu runs with module-scoped least privilege. Returns an
@@ -251,6 +307,12 @@ def main() -> int:
         except Exception:  # noqa: BLE001 — missing key is normal for var-less modules
             print(f"runner: no customer tfvars at {cust_key} (bundle defaults only)", flush=True)
 
+        # Environment config (network + identity, shared by every module in the env). Written
+        # as zzz-env.auto.tfvars.json so it loads LAST and its keys win over the module file —
+        # an upgrade can't pick up a different VPC/subnets from a stale module tfvars copy.
+        env_name = os.environ.get("STRATA_ENV") or "dev"
+        _apply_env_tfvars(s3, state_bucket, env_name, tofu_dir)
+
         # 5. assume the module-scoped deploy role (Decision A), then run tofu
 
         # CodeBuild is ephemeral by design — local tofu state would vanish with the
@@ -292,6 +354,7 @@ def main() -> int:
 
         if action in ("install", "update"):
             _tofu(["plan", "-input=false", "-out=plan.bin"], tofu_dir, env=deploy_env)
+            _guard_plan(tofu_dir, deploy_env)
             _tofu(["apply", "-input=false", "-auto-approve", "plan.bin"], tofu_dir, env=deploy_env)
             outputs_raw = subprocess.check_output(["tofu", "output", "-json"],
                                                   cwd=str(tofu_dir), env=deploy_env)

@@ -8,4 +8,5 @@ def run(settings, args) -> int:
         module_spec=args.module,
         version="installed",
         cli_source="customer_s3",
+        env_name=getattr(args, "env", None) or "dev",
     )

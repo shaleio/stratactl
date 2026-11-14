@@ -29,6 +29,9 @@ def run_enterprise(settings, args) -> int:
         module_spec=ENTERPRISE_MODULE,
         version=getattr(args, "version", "latest"),
         cli_source=getattr(args, "source", None) or "stratahq",
+        env_name=getattr(args, "env", None) or "dev",
+        reconfigure=getattr(args, "reconfigure", False),
+        allow_replace=getattr(args, "allow_replace", False),
     )
 
 
@@ -46,6 +49,9 @@ def run_dev(settings, args) -> int:
             module_spec=source,
             version=version,
             module_id_override=DEV_MODULE,
+            env_name=getattr(args, "env", None) or "dev",
+            reconfigure=getattr(args, "reconfigure", False),
+            allow_replace=getattr(args, "allow_replace", False),
         )
     # Otherwise `source` is a source KIND: customer_s3 (default — your own bucket at
     # the conventional key), or public / stratahq.
@@ -55,4 +61,7 @@ def run_dev(settings, args) -> int:
         module_spec=DEV_MODULE,
         version=version,
         cli_source=source or "customer_s3",
+        env_name=getattr(args, "env", None) or "dev",
+        reconfigure=getattr(args, "reconfigure", False),
+        allow_replace=getattr(args, "allow_replace", False),
     )

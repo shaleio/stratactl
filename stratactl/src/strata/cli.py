@@ -41,12 +41,20 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--env", default="dev", help="Target environment label (maps to profile/conventions).")
     sp.add_argument("--to", dest="version", default="latest", help="Module version (default: latest).")
     sp.add_argument("--yes", action="store_true", help="Skip confirmation; auto-approve apply.")
+    sp.add_argument("--reconfigure", action="store_true",
+                    help="Re-read strata.yaml and apply changes to the stored config (shows a diff, asks first).")
+    sp.add_argument("--allow-replace", dest="allow_replace", action="store_true",
+                    help="Let the plan destroy/replace protected infrastructure (VPC-bound SGs, ALB, ECS, tables...).")
 
-    sp = sub.add_parser("update", help="Update a module to a new version.")
+    sp = sub.add_parser("update", help="Update a module to a new version (reuses the stored config).")
     sp.add_argument("module")
     sp.add_argument("--env", default="dev")
     sp.add_argument("--to", dest="version", default="latest")
     sp.add_argument("--yes", action="store_true")
+    sp.add_argument("--reconfigure", action="store_true",
+                    help="Re-read strata.yaml and apply changes to the stored config (shows a diff, asks first).")
+    sp.add_argument("--allow-replace", dest="allow_replace", action="store_true",
+                    help="Let the plan destroy/replace protected infrastructure (VPC-bound SGs, ALB, ECS, tables...).")
 
     sp = sub.add_parser("uninstall", help="Destroy/uninstall a module.")
     sp.add_argument("module")
@@ -57,6 +65,10 @@ def _build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--env", default="dev")
     sp.add_argument("--to", dest="version", default="latest")
     sp.add_argument("--yes", action="store_true")
+    sp.add_argument("--reconfigure", action="store_true",
+                    help="Re-read strata.yaml and apply changes to the stored config (shows a diff, asks first).")
+    sp.add_argument("--allow-replace", dest="allow_replace", action="store_true",
+                    help="Let the plan destroy/replace protected infrastructure (VPC-bound SGs, ALB, ECS, tables...).")
 
     sp = sub.add_parser("install-stratabi-dev", help="Install StrataBI Developer/Community edition (no StrataHQ contract).")
     sp.add_argument("--env", default="dev")
@@ -65,6 +77,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="HQ-free artifact source: a public URL (https://.../stratabi_dev.zip, "
                          "e.g. a GitHub release), an s3:// URI, or 'customer_s3' (default: your bucket).")
     sp.add_argument("--yes", action="store_true")
+    sp.add_argument("--reconfigure", action="store_true",
+                    help="Re-read strata.yaml and apply changes to the stored config (shows a diff, asks first).")
+    sp.add_argument("--allow-replace", dest="allow_replace", action="store_true",
+                    help="Let the plan destroy/replace protected infrastructure (VPC-bound SGs, ALB, ECS, tables...).")
+
+    from strata.commands import envcmd as _envcmd
+    _envcmd.add_parser(sub)
+    _envcmd.add_planguard_parser(sub)
 
     sub.add_parser("list", help="List installed modules.")
 
@@ -190,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
             "fetch-runtime": lambda: commands.fetch_runtime.run(settings, args),
             "entitlement": lambda: commands.entitlement.run(settings, args),
             "fetch-bundle": lambda: commands.fetch_bundle.run(settings, args),
+            "env": lambda: commands.envcmd.run(settings, args),
+            "plan-guard": lambda: commands.envcmd.run_planguard(settings, args),
         }
         rc = int(dispatch[args.command]() or 0)
         if rc == 0:

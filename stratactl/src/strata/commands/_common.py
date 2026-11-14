@@ -59,9 +59,96 @@ def _upload_tfvars(sess, bucket: str, module_id: str, data: dict) -> Optional[st
     return key
 
 
+def _confirm(prompt: str, assume_yes: bool) -> bool:
+    if assume_yes:
+        return True
+    try:
+        return input(f"{prompt} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _prepare_tfvars(sess, bucket: str, *, action: str, module_id: str, env_name: str,
+                    reconfigure: bool, assume_yes: bool) -> None:
+    """Decide what configuration the runner gets, BEFORE anything is launched.
+
+    * Environment values (network + identity — envstore.ENV_KEYS) live once per env at
+      config/env/<env>.auto.tfvars.json. The runner loads them last, so they win.
+    * install: seed the environment from strata.yaml if it doesn't exist yet; upload the
+      module's own values.
+    * update: reuse what's stored — strata.yaml is NOT re-read (an upgrade must not pick up
+      whatever config sits in the current directory). --reconfigure re-reads it, shows the
+      diff, and asks before changing anything.
+    * Before launching, the environment's network is checked against the account.
+    """
+    from strata.install import envstore
+
+    s3 = sess.client("s3")
+    env_cfg = envstore.load(s3, bucket, env_name)
+    stored_mod = envstore.load_module(s3, bucket, module_id)
+    env_label = f"environment '{env_name}' (s3://{bucket}/{envstore.key(env_name)})"
+
+    def preflight(cfg) -> None:
+        if not cfg:
+            return
+        try:
+            problems = envstore.validate_network(sess.client("ec2"), cfg)
+        except PermissionError:
+            print("env: warning — no ec2:Describe* permission; skipped the network preflight.")
+            return
+        if problems:
+            raise StrataError(f"network preflight failed for {env_label}:\n  - "
+                              + "\n  - ".join(problems)
+                              + "\nNothing was changed. Fix it with `stratactl env set` (or "
+                                "`env import`), then re-run.")
+        print(f"env: {env_label} — network preflight OK")
+
+    if action == "install" or reconfigure:
+        rendered = _resolve_tfvars(module_id)
+        new_env, new_mod = envstore.split(rendered)
+        candidate, write_env = env_cfg, False
+
+        if env_cfg is None:
+            if new_env:
+                candidate, write_env = new_env, True
+        else:
+            changes = envstore.diff(env_cfg, new_env)
+            if changes:
+                print(f"env: strata.yaml differs from {env_label}:\n{envstore.format_diff(changes)}")
+                if not reconfigure:
+                    raise StrataError(
+                        "refusing to change the environment's network/identity during an "
+                        f"{action}. Keep the stored values (fix strata.yaml), or re-run with "
+                        "--reconfigure to change them, or use `stratactl env set`.")
+                if not _confirm("Apply these environment changes?", assume_yes):
+                    raise StrataError("aborted — environment unchanged.")
+                candidate, write_env = {**env_cfg, **new_env}, True
+
+        preflight(candidate)  # before anything is written
+        if write_env:
+            envstore.save(s3, bucket, env_name, candidate)
+            verb = "created" if env_cfg is None else "updated"
+            print(f"env: {verb} {env_label}")
+        if new_mod or stored_mod is None:
+            envstore.save_module(s3, bucket, module_id, new_mod)
+            print(f"tfvars: uploaded s3://{bucket}/{envstore.module_key(module_id)}")
+    else:  # update without --reconfigure: reuse stored config untouched
+        print(f"tfvars: reusing stored s3://{bucket}/{envstore.module_key(module_id)}"
+              + ("" if stored_mod is not None else " (none stored)"))
+        if env_cfg is None and stored_mod and envstore.split(stored_mod)[0]:
+            raise StrataError(
+                f"no {env_label} yet, and this module's stored tfvars carry network values. "
+                "Create the environment first so an upgrade can't change the network:\n"
+                f"  stratactl env import --env {env_name}     # read it from the deployed platform\n"
+                f"  stratactl env show   --env {env_name}     # check it\n"
+                "then re-run this update.")
+        preflight(env_cfg)
+
+
 def launch(settings: Settings, *, action: str, module_spec: str, version: str,
            cli_source: Optional[str] = None, module_id_override: Optional[str] = None,
-           assume_yes: bool = False) -> int:
+           assume_yes: bool = False, env_name: str = "dev", reconfigure: bool = False,
+           allow_replace: bool = False) -> int:
     sess = aws_session.make_session(settings)
     account = aws_session.account_id(sess)
     bucket = settings.resolved_bucket(account)
@@ -141,12 +228,10 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         if src.sha256:
             artifact_env["STRATA_ARTIFACT_SHA256"] = src.sha256
 
-    # Bridge the customer's tfvars to the ephemeral runner (install/update only;
-    # destroy reuses the copy uploaded at install time).
+    # Configuration for the ephemeral runner (install/update; destroy reuses what's stored).
     if action in ("install", "update"):
-        _key = _upload_tfvars(sess, bucket, module_id, _resolve_tfvars(module_id))
-        if _key:
-            print(f"tfvars: uploaded s3://{bucket}/{_key}")
+        _prepare_tfvars(sess, bucket, action=action, module_id=module_id, env_name=env_name,
+                        reconfigure=reconfigure, assume_yes=assume_yes)
 
     job = jobs.create(sess, settings.customer.jobs_table,
                       action=action, module_id=module_id, version=version)
@@ -164,8 +249,11 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         "STRATA_LOCK_TABLE": settings.customer.lock_table,
         "STRATA_INSTALL_TABLE": settings.customer.install_table,
         "STRATA_JOBS_TABLE": settings.customer.jobs_table,
+        "STRATA_ENV": env_name,
         **artifact_env,
     }
+    if allow_replace:
+        env["STRATA_ALLOW_REPLACE"] = "1"
 
     # The runner must have the `strata` package to execute the job. On a standard
     # CodeBuild image it isn't present, so tell the buildspec how to install it
@@ -201,7 +289,7 @@ def launch(settings: Settings, *, action: str, module_spec: str, version: str,
         print(
             "\nNext steps:\n"
             f"  - Re-running is safe — state lives in your S3 backend, so a re-run only\n"
-            f"    creates what's missing:  stratactl {action}-stratabi\n"
+            f"    creates what's missing:  stratactl {action} {module_id}\n"
             f"  - Inspect the full log:    stratactl logs {job.job_id}\n"
             "  - Common causes: an AlreadyExists_ name collision (pick a different install\n"
             "    name), no VPC / <2 AZ subnets, expired SSO (`aws sso login`), or Bedrock\n"

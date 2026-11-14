@@ -3,6 +3,38 @@
 All notable changes to StrataCTL. Format loosely follows Keep a Changelog;
 versions follow the package version in `pyproject.toml`.
 
+## [1.7.8] — 2026-11-14
+
+Upgrade safety: an update can no longer pick up a different network from the operator's
+working directory, and no apply can silently replace load-bearing infrastructure.
+
+### Added
+- **Environment config** — `s3://<strataci-bucket>/config/env/<env>.auto.tfvars.json` holds
+  the account's network + identity values (`name_prefix`, `region`, `vpc_id`,
+  `public_subnet_ids`, `enable_private_subnets`, `private_subnet_ids`) once per `--env`. The
+  runner loads it last (`zzz-env.auto.tfvars.json`), so every module shares it and it wins
+  over module tfvars. Seeded by the first install.
+- **`stratactl env show | set | import | validate | export`.** `import` reads the values from
+  the deployed platform's tofu state (the migration path for pre-1.7.8 installs); `export`
+  writes the file for a BYO CI/CD pipeline.
+- **Network preflight** before every install/update: VPC and subnets exist, subnets are in
+  the VPC, public subnets span ≥2 AZs (warns and skips without `ec2:Describe*`).
+- **Plan guard** — the runner runs `tofu show -json` on the plan and refuses to apply when
+  protected resources (VPC-bound security groups, ALB/listeners/target groups, ECS
+  cluster/service, S3 buckets, DynamoDB tables, Glue catalog, KMS, ECR, Cognito, …) would be
+  destroyed or replaced. `--allow-replace` opts in. Also available standalone for BYO
+  pipelines: `stratactl plan-guard plan.json`.
+
+### Changed
+- **`update` reuses the stored configuration** and no longer re-reads `./strata.yaml`.
+  `--reconfigure` re-reads it, shows the diff, validates the network, and asks before writing.
+  `install` refuses to change an existing environment's network without `--reconfigure`.
+- `update` on a pre-1.7.8 install whose stored tfvars carry network values stops and asks
+  for `stratactl env import` first.
+
+### Fixed
+- The failed-install hint printed `stratactl update-stratabi`; it now prints the real command.
+
 ## [1.7.7] — 2026-11-14
 
 ### Fixed
